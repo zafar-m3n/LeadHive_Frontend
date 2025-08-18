@@ -79,25 +79,31 @@ const getRoles = async () => {
 };
 
 const getLeadStatuses = async () => {
-  return await instance.apiClient.get("/api/v1/supports/lead-statuses", {
+  return await instance.apiClient.get("/api/v1/supports/leads/statuses", {
     headers: instance.defaultHeaders(),
   });
 };
 
 const getLeadSources = async () => {
-  return await instance.apiClient.get("/api/v1/supports/lead-sources", {
+  return await instance.apiClient.get("/api/v1/supports/leads/sources", {
     headers: instance.defaultHeaders(),
   });
 };
 
 const getManagers = async () => {
-  return await instance.apiClient.get("/api/v1/supports/managers", {
+  return await instance.apiClient.get("/api/v1/supports/users/managers", {
     headers: instance.defaultHeaders(),
   });
 };
 
 const getTeamMembers = async (teamId) => {
-  return await instance.apiClient.get(`/api/v1/supports/team-members/${teamId}`, {
+  return await instance.apiClient.get(`/api/v1/supports/teams/${teamId}/members`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const getUnassignedSalesReps = async () => {
+  return await instance.apiClient.get("/api/v1/supports/users/sales/unassigned", {
     headers: instance.defaultHeaders(),
   });
 };
@@ -107,14 +113,14 @@ const getTeamMembers = async (teamId) => {
 /* ========================== */
 
 const createTeam = async (data) => {
-  // { name, manager_id }
+  // { name, manager_id, members?: [user_ids] }
   return await instance.apiClient.post("/api/v1/teams", data, {
     headers: instance.defaultHeaders(),
   });
 };
 
-const getTeams = async () => {
-  return await instance.apiClient.get("/api/v1/teams", {
+const getTeams = async (page = 1, limit = 10) => {
+  return await instance.apiClient.get(`/api/v1/teams?page=${page}&limit=${limit}`, {
     headers: instance.defaultHeaders(),
   });
 };
@@ -126,7 +132,7 @@ const getTeamById = async (id) => {
 };
 
 const updateTeam = async (id, data) => {
-  // { name?, manager_id? }
+  // { name?, manager_id?, members?: [user_ids] }
   return await instance.apiClient.put(`/api/v1/teams/${id}`, data, {
     headers: instance.defaultHeaders(),
   });
@@ -175,6 +181,7 @@ const privateAPI = {
   getLeadSources,
   getManagers,
   getTeamMembers,
+  getUnassignedSalesReps,
 
   // Teams
   createTeam,
