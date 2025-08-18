@@ -1,24 +1,45 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
 import Notification from "@/components/ui/Notification";
 import Pagination from "@/components/ui/Pagination";
+import Spinner from "@/components/ui/Spinner";
 import Heading from "@/components/ui/Heading";
 import AccentButton from "@/components/ui/AccentButton";
 import LeadFormModal from "./components/LeadFormModal";
-import Modal from "@/components/ui/Modal";
 import LeadsTable from "./components/LeadsTable";
+import LeadsFiltersToolbar from "./components/LeadsFiltersToolbar";
+import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
+import ConfirmAssignModal from "./components/ConfirmAssignModal";
+
+/** Simple debounce hook */
+const useDebouncedValue = (value, delay = 300) => {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+};
 
 const AdminLeads = () => {
   const [leads, setLeads] = useState([]);
-  const [statuses, setStatuses] = useState([]);
-  const [sources, setSources] = useState([]);
+  const [statuses, setStatuses] = useState([]); // [{value,label}]
+  const [sources, setSources] = useState([]); // [{value,label}]
   const [loading, setLoading] = useState(false);
 
   // Pagination
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Filters / Sorting / Search
+  const [statusId, setStatusId] = useState("");
+  const [sourceId, setSourceId] = useState("");
+  const [orderBy, setOrderBy] = useState(""); // backend uses id ASC if unset
+  const [orderDir, setOrderDir] = useState("ASC");
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 300);
 
   // Lead Form Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -34,17 +55,38 @@ const AdminLeads = () => {
   const [selectedAssignee, setSelectedAssignee] = useState(null);
   const [managers, setManagers] = useState([]);
 
-  const fetchLeads = async (currentPage = page) => {
-    try {
-      const res = await API.private.getLeads({ page: currentPage, limit });
-      if (res.data?.code === "OK") {
-        setLeads(res.data.data.leads || []);
-        setTotalPages(res.data.data.pagination.totalPages);
+  // Prevent stale updates (race-safe)
+  const fetchGuard = useRef(0);
+
+  const fetchLeads = useCallback(
+    async (paramsOverride = {}) => {
+      const fetchId = ++fetchGuard.current;
+      setLoading(true);
+      try {
+        const params = {
+          page,
+          limit,
+          status_id: statusId || undefined,
+          source_id: sourceId || undefined,
+          orderBy: orderBy || undefined,
+          orderDir: orderDir || undefined,
+          search: debouncedSearch || undefined,
+          ...paramsOverride,
+        };
+        const res = await API.private.getLeads(params);
+        if (fetchId !== fetchGuard.current) return; // ignore stale responses
+        if (res.data?.code === "OK") {
+          setLeads(res.data.data.leads || []);
+          setTotalPages(res.data.data.pagination.totalPages);
+        }
+      } catch (err) {
+        Notification.error(err.response?.data?.error || "Failed to fetch leads");
+      } finally {
+        if (fetchId === fetchGuard.current) setLoading(false);
       }
-    } catch (err) {
-      Notification.error(err.response?.data?.error || "Failed to fetch leads");
-    }
-  };
+    },
+    [page, limit, statusId, sourceId, orderBy, orderDir, debouncedSearch]
+  );
 
   const fetchStatuses = async () => {
     try {
@@ -75,19 +117,31 @@ const AdminLeads = () => {
         setManagers(res.data.data || []);
       }
     } catch {
-      Notification.error("Failed to fetch managers");
+      Notification.error("Failed to fetch assignees");
     }
   };
 
-  useEffect(() => {
-    fetchLeads(page);
-  }, [page]);
-
+  // Initial loads
   useEffect(() => {
     fetchStatuses();
     fetchSources();
     fetchManagersAndAdmins();
   }, []);
+
+  // Fetch leads when page changes
+  useEffect(() => {
+    fetchLeads();
+  }, [page, fetchLeads]);
+
+  // Reset page on filter/sort/search change
+  useEffect(() => {
+    setPage(1);
+  }, [statusId, sourceId, orderBy, orderDir, debouncedSearch]);
+
+  // Refetch when those dependencies change (after resetting page)
+  useEffect(() => {
+    fetchLeads({ page: 1 });
+  }, [statusId, sourceId, orderBy, orderDir, debouncedSearch, fetchLeads]);
 
   const handleSubmit = async (data) => {
     setLoading(true);
@@ -154,11 +208,47 @@ const AdminLeads = () => {
     }
   };
 
+  // Toolbar props
+  const sortFields = useMemo(
+    () => [
+      { value: "", label: "Default (ID)" },
+      { value: "first_name", label: "First name" },
+      { value: "last_name", label: "Last name" },
+      { value: "email", label: "Email" },
+      { value: "company", label: "Company" },
+      { value: "value_decimal", label: "Value" },
+      { value: "created_at", label: "Created at" },
+      { value: "updated_at", label: "Updated at" },
+    ],
+    []
+  );
+
+  const orderDirOptions = [
+    { value: "ASC", label: "Ascending" },
+    { value: "DESC", label: "Descending" },
+  ];
+
+  const handleToolbarChange = (partial) => {
+    if (Object.prototype.hasOwnProperty.call(partial, "search")) setSearch(partial.search);
+    if (Object.prototype.hasOwnProperty.call(partial, "statusId")) setStatusId(partial.statusId);
+    if (Object.prototype.hasOwnProperty.call(partial, "sourceId")) setSourceId(partial.sourceId);
+    if (Object.prototype.hasOwnProperty.call(partial, "orderBy")) setOrderBy(partial.orderBy);
+    if (Object.prototype.hasOwnProperty.call(partial, "orderDir")) setOrderDir(partial.orderDir);
+  };
+
+  const resetAllFilters = () => {
+    setStatusId("");
+    setSourceId("");
+    setOrderBy("");
+    setOrderDir("ASC");
+    setSearch("");
+  };
+
   return (
     <DefaultLayout>
       <div className="space-y-6">
         {/* Heading + Add Button */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <Heading>Admin Leads</Heading>
           <div className="w-fit">
             <AccentButton
@@ -171,16 +261,39 @@ const AdminLeads = () => {
           </div>
         </div>
 
-        {/* Leads Table */}
-        <LeadsTable
-          leads={leads}
-          onEdit={handleEdit}
-          onDelete={confirmDelete}
-          managers={managers}
-          onAssignOptionClick={handleAssignOptionClick}
+        {/* Filters & Search Toolbar */}
+        <LeadsFiltersToolbar
+          statuses={statuses}
+          sources={sources}
+          sortFields={sortFields}
+          orderDirOptions={orderDirOptions}
+          values={{ search, statusId, sourceId, orderBy, orderDir }}
+          onChange={handleToolbarChange}
+          onResetAll={resetAllFilters}
         />
 
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} className="mt-4" />
+        {/* Leads Table */}
+        <div className="relative">
+          {loading ? (
+            <Spinner message="Loading leads..." />
+          ) : (
+            <>
+              <LeadsTable
+                leads={leads}
+                onEdit={handleEdit}
+                onDelete={confirmDelete}
+                managers={managers}
+                onAssignOptionClick={handleAssignOptionClick}
+              />
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={(p) => setPage(p)}
+                className="mt-2"
+              />
+            </>
+          )}
+        </div>
 
         <LeadFormModal
           isOpen={isModalOpen}
@@ -195,50 +308,20 @@ const AdminLeads = () => {
           loading={loading}
         />
 
-        {/* Delete Confirmation Modal */}
-        <Modal
+        <ConfirmDeleteModal
           isOpen={isDeleteModalOpen}
-          onClose={() => setIsDeleteModalOpen(false)}
-          title="Confirm Deletion"
-          size="sm"
-        >
-          <p>
-            Are you sure you want to delete lead{" "}
-            <span className="font-semibold">{leadToDelete?.email || leadToDelete?.company}</span>?
-          </p>
-          <div className="flex justify-end gap-3 mt-4">
-            <button onClick={() => setIsDeleteModalOpen(false)} className="text-sm px-4 py-1.5 rounded bg-gray-300">
-              Cancel
-            </button>
-            <button onClick={handleDelete} className="text-sm px-4 py-1.5 rounded bg-red-500 text-white">
-              Delete
-            </button>
-          </div>
-        </Modal>
+          lead={leadToDelete}
+          onCancel={() => setIsDeleteModalOpen(false)}
+          onConfirm={handleDelete}
+        />
 
-        {/* Assign Confirmation Modal */}
-        <Modal
+        <ConfirmAssignModal
           isOpen={isAssignModalOpen}
-          onClose={() => setIsAssignModalOpen(false)}
-          title="Confirm Assignment"
-          size="sm"
-        >
-          <p>
-            Assign lead <span className="font-semibold">{leadToAssign?.email || leadToAssign?.company}</span> to{" "}
-            <span className="font-semibold">
-              {selectedAssignee?.full_name} ({selectedAssignee?.email})
-            </span>
-            ?
-          </p>
-          <div className="flex justify-end gap-3 mt-4">
-            <button onClick={() => setIsAssignModalOpen(false)} className="text-sm px-4 py-1.5 rounded bg-gray-300">
-              Cancel
-            </button>
-            <button onClick={handleAssign} className="text-sm px-4 py-1.5 rounded bg-indigo-600 text-white">
-              Yes, Assign
-            </button>
-          </div>
-        </Modal>
+          lead={leadToAssign}
+          assignee={selectedAssignee}
+          onCancel={() => setIsAssignModalOpen(false)}
+          onConfirm={handleAssign}
+        />
       </div>
     </DefaultLayout>
   );
