@@ -2,23 +2,67 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 
+// Auth
 import RegisterPage from "@/pages/auth/RegisterPage";
 import LoginPage from "@/pages/auth/LoginPage";
 
+// Dashboards
 import SalesDashboard from "@/pages/dashboard/SalesDashboard";
 import AdminDashboard from "@/pages/dashboard/AdminDashboard";
 import ManagerDashboard from "@/pages/dashboard/ManagerDashboard";
+
+// Users
+import ManageUsers from "@/pages/users/ManageUsers";
+
+// Leads
+import AdminLeads from "@/pages/leads/AdminLeads";
+import ManagerLeads from "@/pages/leads/ManagerLeads";
+import SalesLeads from "@/pages/leads/SalesLeads";
+
+// Reports
+import AdminReports from "@/pages/reports/AdminReports";
+import ManagerReports from "@/pages/reports/ManagerReports";
+
+// Profile
+import ManagerProfile from "@/pages/profile/ManagerProfile";
+import SalesProfile from "@/pages/profile/SalesProfile";
+
+// Settings
+import AdminSettings from "@/pages/settings/AdminSettings";
+
+// Shared
 import NotFound from "@/pages/NotFound";
 
+// Guards & Utilities
 import PrivateRoute from "@/components/PrivateRoute";
 import PublicRoute from "@/components/PublicRoute";
 import token from "@/lib/utilities";
 
 function App() {
   const protectedRoutes = [
-    { path: "/dashboard", element: SalesDashboard },
-    { path: "/admin/dashboard", element: AdminDashboard },
-    { path: "/manager/dashboard", element: ManagerDashboard },
+    // Dashboards
+    { path: "/dashboard", element: SalesDashboard, roles: ["sales_rep"] },
+    { path: "/admin/dashboard", element: AdminDashboard, roles: ["admin"] },
+    { path: "/manager/dashboard", element: ManagerDashboard, roles: ["manager"] },
+
+    // Users
+    { path: "/admin/users", element: ManageUsers, roles: ["admin"] },
+
+    // Leads
+    { path: "/admin/leads", element: AdminLeads, roles: ["admin"] },
+    { path: "/manager/leads", element: ManagerLeads, roles: ["manager"] },
+    { path: "/leads", element: SalesLeads, roles: ["sales_rep"] },
+
+    // Reports
+    { path: "/admin/reports", element: AdminReports, roles: ["admin"] },
+    { path: "/manager/reports", element: ManagerReports, roles: ["manager"] },
+
+    // Profile
+    { path: "/manager/profile", element: ManagerProfile, roles: ["manager"] },
+    { path: "/profile", element: SalesProfile, roles: ["sales_rep"] },
+
+    // Settings
+    { path: "/admin/settings", element: AdminSettings, roles: ["admin"] },
   ];
 
   const publicRoutes = [
@@ -50,7 +94,7 @@ function App() {
               key={idx}
               path={route.path}
               element={
-                <PrivateRoute>
+                <PrivateRoute allowedRoles={route.roles}>
                   <route.element />
                 </PrivateRoute>
               }
