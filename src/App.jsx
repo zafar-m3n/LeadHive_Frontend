@@ -6,28 +6,44 @@ import RegisterPage from "@/pages/auth/RegisterPage";
 import LoginPage from "@/pages/auth/LoginPage";
 
 import DashboardPage from "@/pages/dashboard";
+import NotFound from "@/pages/NotFound";
 
 import PrivateRoute from "@/components/PrivateRoute";
 import PublicRoute from "@/components/PublicRoute";
 import token from "@/lib/utilities";
 
 function App() {
-  const protectedRoutes = [{ path: "/dashboard", element: DashboardPage }];
+  const protectedRoutes = [
+    { path: "/dashboard", element: DashboardPage },
+    // Future:
+    // { path: "/admin/dashboard", element: AdminDashboardPage },
+    // { path: "/manager/dashboard", element: ManagerDashboardPage },
+  ];
 
   const publicRoutes = [
     { path: "/register", element: RegisterPage },
     { path: "/login", element: LoginPage },
   ];
 
+  const getDashboardRedirect = () => {
+    if (!token.isAuthenticated()) return "/login";
+
+    const user = token.getUserData();
+    const role = user?.role?.value;
+
+    if (role === "admin") return "/admin/dashboard";
+    if (role === "manager") return "/manager/dashboard";
+    return "/dashboard"; // default for sales_rep or fallback
+  };
+
   return (
     <>
       <Router>
         <Routes>
-          <Route
-            path="/"
-            element={token.isAuthenticated() ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />}
-          />
+          {/* Root redirect by role */}
+          <Route path="/" element={<Navigate to={getDashboardRedirect()} replace />} />
 
+          {/* Protected routes */}
           {protectedRoutes.map((route, idx) => (
             <Route
               key={idx}
@@ -40,6 +56,7 @@ function App() {
             />
           ))}
 
+          {/* Public routes */}
           {publicRoutes.map((route, idx) => (
             <Route
               key={idx}
@@ -51,9 +68,13 @@ function App() {
               }
             />
           ))}
+
+          {/* Not Found */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
 
+      {/* Toasts */}
       <ToastContainer
         position="top-right"
         autoClose={2500}
