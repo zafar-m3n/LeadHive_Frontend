@@ -108,6 +108,12 @@ const getUnassignedSalesReps = async () => {
   });
 };
 
+const getManagersAndAdmins = async () => {
+  return await instance.apiClient.get("/api/v1/supports/users/managers-admins", {
+    headers: instance.defaultHeaders(),
+  });
+};
+
 /* ========================== */
 /* Team Functions             */
 /* ========================== */
@@ -250,6 +256,7 @@ const privateAPI = {
   getManagers,
   getTeamMembers,
   getUnassignedSalesReps,
+  getManagersAndAdmins,
 
   // Teams
   createTeam,

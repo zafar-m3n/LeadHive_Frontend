@@ -17,7 +17,6 @@ import * as Yup from "yup";
 const schema = Yup.object().shape({
   status_id: Yup.string().required("Status is required"),
   email: Yup.string().nullable().email("Invalid email"),
-  value_decimal: Yup.number().nullable().typeError("Must be a number"),
 });
 
 const LeadFormModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, sources, loading }) => {

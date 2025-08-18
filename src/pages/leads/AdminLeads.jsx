@@ -28,6 +28,12 @@ const AdminLeads = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
 
+  // Assign Lead Modal
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [leadToAssign, setLeadToAssign] = useState(null);
+  const [selectedAssignee, setSelectedAssignee] = useState(null);
+  const [managers, setManagers] = useState([]);
+
   const fetchLeads = async (currentPage = page) => {
     try {
       const res = await API.private.getLeads({ page: currentPage, limit });
@@ -62,6 +68,17 @@ const AdminLeads = () => {
     }
   };
 
+  const fetchManagersAndAdmins = async () => {
+    try {
+      const res = await API.private.getManagersAndAdmins();
+      if (res.data?.code === "OK") {
+        setManagers(res.data.data || []);
+      }
+    } catch {
+      Notification.error("Failed to fetch managers");
+    }
+  };
+
   useEffect(() => {
     fetchLeads(page);
   }, [page]);
@@ -69,6 +86,7 @@ const AdminLeads = () => {
   useEffect(() => {
     fetchStatuses();
     fetchSources();
+    fetchManagersAndAdmins();
   }, []);
 
   const handleSubmit = async (data) => {
@@ -115,6 +133,27 @@ const AdminLeads = () => {
     }
   };
 
+  const handleAssignOptionClick = (lead, assignee) => {
+    setLeadToAssign(lead);
+    setSelectedAssignee(assignee);
+    setIsAssignModalOpen(true);
+  };
+
+  const handleAssign = async () => {
+    if (!leadToAssign || !selectedAssignee) return;
+    try {
+      await API.private.assignLead(leadToAssign.id, { assignee_id: selectedAssignee.id });
+      Notification.success("Lead assigned successfully");
+      fetchLeads();
+    } catch (err) {
+      Notification.error(err.response?.data?.error || "Failed to assign lead");
+    } finally {
+      setIsAssignModalOpen(false);
+      setLeadToAssign(null);
+      setSelectedAssignee(null);
+    }
+  };
+
   return (
     <DefaultLayout>
       <div className="space-y-6">
@@ -133,7 +172,13 @@ const AdminLeads = () => {
         </div>
 
         {/* Leads Table */}
-        <LeadsTable leads={leads} onEdit={handleEdit} onDelete={confirmDelete} />
+        <LeadsTable
+          leads={leads}
+          onEdit={handleEdit}
+          onDelete={confirmDelete}
+          managers={managers}
+          onAssignOptionClick={handleAssignOptionClick}
+        />
 
         <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} className="mt-4" />
 
@@ -150,6 +195,7 @@ const AdminLeads = () => {
           loading={loading}
         />
 
+        {/* Delete Confirmation Modal */}
         <Modal
           isOpen={isDeleteModalOpen}
           onClose={() => setIsDeleteModalOpen(false)}
@@ -166,6 +212,30 @@ const AdminLeads = () => {
             </button>
             <button onClick={handleDelete} className="text-sm px-4 py-1.5 rounded bg-red-500 text-white">
               Delete
+            </button>
+          </div>
+        </Modal>
+
+        {/* Assign Confirmation Modal */}
+        <Modal
+          isOpen={isAssignModalOpen}
+          onClose={() => setIsAssignModalOpen(false)}
+          title="Confirm Assignment"
+          size="sm"
+        >
+          <p>
+            Assign lead <span className="font-semibold">{leadToAssign?.email || leadToAssign?.company}</span> to{" "}
+            <span className="font-semibold">
+              {selectedAssignee?.full_name} ({selectedAssignee?.email})
+            </span>
+            ?
+          </p>
+          <div className="flex justify-end gap-3 mt-4">
+            <button onClick={() => setIsAssignModalOpen(false)} className="text-sm px-4 py-1.5 rounded bg-gray-300">
+              Cancel
+            </button>
+            <button onClick={handleAssign} className="text-sm px-4 py-1.5 rounded bg-indigo-600 text-white">
+              Yes, Assign
             </button>
           </div>
         </Modal>
