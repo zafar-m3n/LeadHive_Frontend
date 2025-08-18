@@ -20,6 +20,7 @@ const Modal = ({
     md: "max-w-md",
     lg: "max-w-lg",
     xl: "max-w-xl",
+    xxl: "max-w-4xl",
   };
 
   return (
