@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import ReactDOM from "react-dom";
 import Badge from "@/components/ui/Badge";
 import IconComponent from "@/components/ui/Icon";
 import { getStatusColor, getSourceColor } from "@/utils/leadColors";
+import countryList from "react-select-country-list";
 
 const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) => {
   const [dropdownOpen, setDropdownOpen] = useState(null); // lead.id
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+
+  // Country helper (react-select-country-list)
+  const countries = useMemo(() => countryList(), []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -26,10 +30,21 @@ const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) 
     return latest?.assignee?.full_name || "-";
   };
 
-  const formatValue = (v) => {
-    const num = Number(v);
-    if (Number.isNaN(num)) return "-";
-    return `$${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Country resolver
+  const resolveCountry = (raw) => {
+    if (!raw) return "-";
+    const t = String(raw).trim();
+    if (!t) return "-";
+
+    // If 2-letter code, try to resolve to full label
+    if (t.length === 2) {
+      const code = t.toUpperCase();
+      const label = countries.getLabel(code);
+      return label || code; // fallback to code if not found
+    }
+
+    // Otherwise, assume it's already a name
+    return t;
   };
 
   const toggleDropdown = (lead, e) => {
@@ -54,9 +69,9 @@ const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) 
             <th className="px-3 py-2 text-left font-semibold">Company</th>
             <th className="px-3 py-2 text-left font-semibold">Email</th>
             <th className="px-3 py-2 text-left font-semibold">Phone</th>
+            <th className="px-3 py-2 text-left font-semibold hidden sm:table-cell">Country</th>
             <th className="px-3 py-2 text-left font-semibold">Status</th>
             <th className="px-3 py-2 text-left font-semibold hidden md:table-cell">Source</th>
-            <th className="px-3 py-2 text-left font-semibold hidden sm:table-cell">Value</th>
             <th className="px-3 py-2 text-left font-semibold">Assignee</th>
             <th className="px-3 py-2 text-left font-semibold">Actions</th>
           </tr>
@@ -78,6 +93,8 @@ const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) 
               const sourceValue = row.LeadSource?.value || "";
               const phone = row.phone && row.phone.length > 4 ? row.phone : "N/A";
               const assignee = getCurrentAssigneeName(row);
+              const countryRaw = row.country_code ?? row.country;
+              const countryText = resolveCountry(countryRaw);
 
               return (
                 <tr key={row.id} className="border-t border-gray-100 hover:bg-gray-50/70">
@@ -85,15 +102,13 @@ const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) 
                   <td className="px-3 py-2">{row.company || "-"}</td>
                   <td className="px-3 py-2">{row.email || "-"}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{phone}</td>
+                  <td className="px-3 py-2 whitespace-nowrap hidden sm:table-cell">{countryText}</td>
                   <td className="px-3 py-2">
                     <Badge text={statusLabel} color={getStatusColor(statusValue)} size="sm" rounded="rounded" />
                   </td>
                   <td className="px-3 py-2 hidden md:table-cell">
                     <Badge text={sourceLabel} color={getSourceColor(sourceValue)} size="sm" rounded="rounded" />
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap hidden sm:table-cell">{formatValue(row.value_decimal)}</td>
-
-                  {/* Assignee with chevron dropdown trigger */}
                   <td className="px-3 py-2">
                     <button
                       onClick={(e) => toggleDropdown(row, e)}
@@ -133,7 +148,6 @@ const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) 
         </tbody>
       </table>
 
-      {/* Portal Dropdown (always rendered, hidden/shown with classes) */}
       {ReactDOM.createPortal(
         <div
           className={`assignee-portal-dropdown font-manrope absolute w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] transform transition-all duration-200 origin-top ${
@@ -151,11 +165,10 @@ const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) 
                 <div
                   key={m.id}
                   onClick={() => {
+                    const openId = dropdownOpen;
                     setDropdownOpen(null);
-                    onAssignOptionClick(
-                      leads.find((l) => l.id === dropdownOpen),
-                      m
-                    );
+                    const lead = leads.find((l) => l.id === openId);
+                    if (lead) onAssignOptionClick(lead, m);
                   }}
                   className="px-3 py-2 text-sm hover:bg-indigo-50 cursor-pointer"
                 >
