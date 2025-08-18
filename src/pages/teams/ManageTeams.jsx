@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
 import Notification from "@/components/ui/Notification";
@@ -15,6 +16,7 @@ const ManageTeams = () => {
   const [managers, setManagers] = useState([]);
   const [salesReps, setSalesReps] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [memberOptions, setMemberOptions] = useState([]);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -28,6 +30,8 @@ const ManageTeams = () => {
   // Delete Confirmation Modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [teamToDelete, setTeamToDelete] = useState(null);
+
+  const navigate = useNavigate();
 
   // ==========================
   // Fetch Functions
@@ -51,18 +55,23 @@ const ManageTeams = () => {
     }
   };
 
-  const fetchSalesReps = async () => {
-    try {
-      const res = await API.private.getUnassignedSalesReps();
-      setSalesReps(res.data.data.map((s) => ({ value: s.id, label: s.full_name })));
-    } catch (err) {
-      Notification.error("Failed to fetch sales reps");
-    }
-  };
-
   useEffect(() => {
     fetchTeams(page);
   }, [page]);
+
+  const fetchSalesReps = async () => {
+    try {
+      const res = await API.private.getUnassignedSalesReps();
+      if (res.data.code === "OK") {
+        const unassigned = res.data.data.map((s) => ({ value: s.id, label: s.full_name }));
+        setSalesReps(unassigned);
+        setMemberOptions(unassigned);
+      }
+    } catch (err) {
+      console.log("error", err);
+      Notification.error("Failed to fetch sales reps");
+    }
+  };
 
   useEffect(() => {
     fetchManagers();
@@ -83,6 +92,7 @@ const ManageTeams = () => {
         Notification.success("Team created successfully");
       }
       fetchTeams();
+      fetchSalesReps();
       setIsModalOpen(false);
       setEditingTeam(null);
     } catch (err) {
@@ -94,16 +104,25 @@ const ManageTeams = () => {
 
   const handleEdit = async (team) => {
     try {
-      // Fetch full team data including members
       const res = await API.private.getTeamById(team.id);
       const teamData = res.data.data;
+
+      // Build options for current members
+      const currentMemberOptions = (teamData.Users || []).map((u) => ({ value: u.id, label: u.full_name })) || [];
+
+      // Merge with unassigned sales reps (avoid duplicates)
+      const mergedMap = new Map();
+      [...salesReps, ...currentMemberOptions].forEach((opt) => mergedMap.set(opt.value, opt));
+      const mergedOptions = Array.from(mergedMap.values());
+      setMemberOptions(mergedOptions);
 
       setEditingTeam({
         id: teamData.id,
         name: teamData.name,
-        manager_id: teamData.manager?.id || null,
-        members: teamData.Users?.map((u) => u.id) || [],
+        manager_id: teamData.manager?.id ?? "",
+        members: (teamData.Users || []).map((u) => u.id), // IDs only
       });
+
       setIsModalOpen(true);
     } catch (err) {
       Notification.error("Failed to fetch team details");
@@ -127,6 +146,10 @@ const ManageTeams = () => {
       setIsDeleteModalOpen(false);
       setTeamToDelete(null);
     }
+  };
+
+  const handleView = (team) => {
+    navigate(`/admin/teams/${team.id}`);
   };
 
   // ==========================
@@ -171,6 +194,13 @@ const ManageTeams = () => {
                 return (
                   <div className="flex space-x-2">
                     <button
+                      onClick={() => handleView(row)}
+                      className="inline-flex items-center px-2 py-1 border border-gray-300 rounded hover:bg-gray-100"
+                      title="View"
+                    >
+                      <IconComponent icon="mdi:eye" width={20} className="text-gray-800" />
+                    </button>
+                    <button
                       onClick={() => handleEdit(row)}
                       className="inline-flex items-center px-2 py-1 border border-gray-300 rounded hover:bg-gray-100"
                       title="Edit"
@@ -201,11 +231,12 @@ const ManageTeams = () => {
           onClose={() => {
             setIsModalOpen(false);
             setEditingTeam(null);
+            setMemberOptions(salesReps);
           }}
           onSubmit={handleSubmit}
           editingTeam={editingTeam}
           managers={managers}
-          salesReps={salesReps}
+          memberOptions={memberOptions}
           loading={loading}
         />
 

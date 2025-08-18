@@ -15,11 +15,27 @@ import * as Yup from "yup";
 // ==========================
 const schema = Yup.object().shape({
   name: Yup.string().required("Team name is required"),
-  manager_id: Yup.string().required("Manager is required"),
-  members: Yup.array().of(Yup.string()),
+  // manager_id can arrive as string from <Select>, so validate presence and coerce on submit
+  manager_id: Yup.mixed().required("Manager is required"),
+  // members must be an array of numbers (IDs)
+  members: Yup.array().of(Yup.number().typeError("Invalid member")).default([]),
 });
 
-const TeamFormModal = ({ isOpen, onClose, onSubmit, editingTeam, managers, salesReps, loading }) => {
+/**
+ * NOTE:
+ * - Pass `memberOptions` from parent:
+ *   → It must include BOTH unassigned reps and current team members when editing.
+ * - If you only pass unassigned reps, current members won't be selectable or shown.
+ */
+const TeamFormModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  editingTeam,
+  managers,
+  memberOptions = [], // <-- merged options (unassigned + current members)
+  loading,
+}) => {
   const {
     register,
     handleSubmit,
@@ -36,13 +52,16 @@ const TeamFormModal = ({ isOpen, onClose, onSubmit, editingTeam, managers, sales
     },
   });
 
+  // Normalize to numbers to match option values
+  const toNumbers = (arr) => (Array.isArray(arr) ? arr.map((v) => Number(v)) : []);
+
   // Reset form whenever modal opens with editing data
   useEffect(() => {
     if (editingTeam) {
       reset({
         name: editingTeam.name || "",
-        manager_id: editingTeam.manager_id || "",
-        members: editingTeam.members || [],
+        manager_id: editingTeam.manager_id ?? "",
+        members: toNumbers(editingTeam.members || []),
       });
     } else {
       reset({ name: "", manager_id: "", members: [] });
@@ -50,7 +69,13 @@ const TeamFormModal = ({ isOpen, onClose, onSubmit, editingTeam, managers, sales
   }, [editingTeam, reset]);
 
   const submitHandler = (data) => {
-    onSubmit(data);
+    // Coerce types safely before sending to API
+    const payload = {
+      ...data,
+      manager_id: Number(data.manager_id),
+      members: toNumbers(data.members),
+    };
+    onSubmit(payload);
   };
 
   return (
@@ -60,18 +85,23 @@ const TeamFormModal = ({ isOpen, onClose, onSubmit, editingTeam, managers, sales
 
         <Select
           label="Manager"
-          value={watch("manager_id") || ""}
+          value={watch("manager_id") ?? ""}
           onChange={(val) => setValue("manager_id", val)}
           options={managers}
           placeholder="Select Manager"
           error={errors.manager_id?.message}
         />
 
+        {/* IMPORTANT:
+            MultiSelect expects `value` to be an array of IDs.
+            We pass RHF's members (array of numbers).
+            Options MUST include current members when editing.
+        */}
         <MultiSelect
           label="Members"
           value={watch("members") || []}
-          onChange={(val) => setValue("members", val)}
-          options={salesReps}
+          onChange={(ids) => setValue("members", ids)}
+          options={memberOptions}
           placeholder="Select Sales Reps"
           error={errors.members?.message}
         />

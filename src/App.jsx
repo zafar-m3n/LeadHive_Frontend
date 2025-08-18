@@ -16,6 +16,7 @@ import ManageUsers from "@/pages/users/ManageUsers";
 
 //Teams
 import ManageTeams from "@/pages/teams/ManageTeams";
+import ViewTeamPage from "@/pages/teams/ViewTeamPage";
 
 // Leads
 import AdminLeads from "@/pages/leads/AdminLeads";
@@ -53,6 +54,7 @@ function App() {
 
     //Teams
     { path: "/admin/teams", element: ManageTeams, roles: ["admin"] },
+    { path: "/admin/teams/:id", element: ViewTeamPage, roles: ["admin"] },
 
     // Leads
     { path: "/admin/leads", element: AdminLeads, roles: ["admin"] },
