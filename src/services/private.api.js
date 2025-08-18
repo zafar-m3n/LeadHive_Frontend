@@ -103,6 +103,55 @@ const getTeamMembers = async (teamId) => {
 };
 
 /* ========================== */
+/* Team Functions             */
+/* ========================== */
+
+const createTeam = async (data) => {
+  // { name, manager_id }
+  return await instance.apiClient.post("/api/v1/teams", data, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const getTeams = async () => {
+  return await instance.apiClient.get("/api/v1/teams", {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const getTeamById = async (id) => {
+  return await instance.apiClient.get(`/api/v1/teams/${id}`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const updateTeam = async (id, data) => {
+  // { name?, manager_id? }
+  return await instance.apiClient.put(`/api/v1/teams/${id}`, data, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const deleteTeam = async (id) => {
+  return await instance.apiClient.delete(`/api/v1/teams/${id}`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const addMemberToTeam = async (id, data) => {
+  // data: { user_id }
+  return await instance.apiClient.post(`/api/v1/teams/${id}/members`, data, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const removeMemberFromTeam = async (id, userId) => {
+  return await instance.apiClient.delete(`/api/v1/teams/${id}/members/${userId}`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+/* ========================== */
 /* Export API                 */
 /* ========================== */
 
@@ -126,6 +175,15 @@ const privateAPI = {
   getLeadSources,
   getManagers,
   getTeamMembers,
+
+  // Teams
+  createTeam,
+  getTeams,
+  getTeamById,
+  updateTeam,
+  deleteTeam,
+  addMemberToTeam,
+  removeMemberFromTeam,
 };
 
 export default privateAPI;
