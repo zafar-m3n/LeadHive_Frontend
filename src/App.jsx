@@ -5,7 +5,9 @@ import { ToastContainer } from "react-toastify";
 import RegisterPage from "@/pages/auth/RegisterPage";
 import LoginPage from "@/pages/auth/LoginPage";
 
-import DashboardPage from "@/pages/dashboard";
+import SalesDashboard from "@/pages/dashboard/SalesDashboard";
+import AdminDashboard from "@/pages/dashboard/AdminDashboard";
+import ManagerDashboard from "@/pages/dashboard/ManagerDashboard";
 import NotFound from "@/pages/NotFound";
 
 import PrivateRoute from "@/components/PrivateRoute";
@@ -14,10 +16,9 @@ import token from "@/lib/utilities";
 
 function App() {
   const protectedRoutes = [
-    { path: "/dashboard", element: DashboardPage },
-    // Future:
-    // { path: "/admin/dashboard", element: AdminDashboardPage },
-    // { path: "/manager/dashboard", element: ManagerDashboardPage },
+    { path: "/dashboard", element: SalesDashboard },
+    { path: "/admin/dashboard", element: AdminDashboard },
+    { path: "/manager/dashboard", element: ManagerDashboard },
   ];
 
   const publicRoutes = [
