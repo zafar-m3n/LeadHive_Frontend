@@ -1,7 +1,7 @@
 import React from "react";
 import SelectLib from "react-select";
 
-const Select = ({ value, onChange, options = [], placeholder = "Select", error, label, ...rest }) => {
+const MultiSelect = ({ value = [], onChange, options = [], placeholder = "Select", error, label, ...rest }) => {
   const customStyles = {
     control: (base, state) => ({
       ...base,
@@ -22,14 +22,29 @@ const Select = ({ value, onChange, options = [], placeholder = "Select", error, 
       fontFamily: "Manrope, sans-serif",
       fontSize: "0.875rem",
     }),
-    singleValue: (base) => ({
+    multiValue: (base) => ({
+      ...base,
+      backgroundColor: "#f3f4f6", // light gray for selected tags
+      borderRadius: "4px",
+      padding: "0 2px",
+    }),
+    multiValueLabel: (base) => ({
       ...base,
       color: "#111827",
+      fontSize: "0.875rem",
     }),
-    option: (base, { isFocused }) => ({
+    multiValueRemove: (base) => ({
       ...base,
-      backgroundColor: isFocused ? "#f59e0b" : "#fff",
-      color: isFocused ? "#fff" : "#111827",
+      color: "#6b7280",
+      ":hover": {
+        backgroundColor: "#f87171",
+        color: "#fff",
+      },
+    }),
+    option: (base, { isFocused, isSelected }) => ({
+      ...base,
+      backgroundColor: isSelected ? "#f59e0b" : isFocused ? "#fde68a" : "#fff",
+      color: isSelected ? "#fff" : "#111827",
       cursor: "pointer",
     }),
     placeholder: (base) => ({
@@ -42,9 +57,10 @@ const Select = ({ value, onChange, options = [], placeholder = "Select", error, 
     <div className="w-full">
       {label && <label className="block mb-1 text-sm font-medium text-gray-800">{label}</label>}
       <SelectLib
+        isMulti
         options={options}
-        value={options.find((opt) => opt.value === value) || null}
-        onChange={(selected) => onChange(selected?.value || "")}
+        value={options.filter((opt) => value.includes(opt.value))}
+        onChange={(selected) => onChange(selected ? selected.map((s) => s.value) : [])}
         placeholder={placeholder}
         styles={customStyles}
         classNamePrefix="react-select"
@@ -56,4 +72,4 @@ const Select = ({ value, onChange, options = [], placeholder = "Select", error, 
   );
 };
 
-export default Select;
+export default MultiSelect;
