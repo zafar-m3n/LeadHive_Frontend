@@ -25,9 +25,14 @@ const useDebouncedValue = (value, delay = 300) => {
 
 const AdminLeads = () => {
   const navigate = useNavigate();
+
+  // Data
   const [leads, setLeads] = useState([]);
   const [statuses, setStatuses] = useState([]); // [{value,label}]
   const [sources, setSources] = useState([]); // [{value,label}]
+  const [managers, setManagers] = useState([]);
+
+  // UI
   const [loading, setLoading] = useState(false);
 
   // Pagination
@@ -38,45 +43,44 @@ const AdminLeads = () => {
   // Filters / Sorting / Search
   const [statusId, setStatusId] = useState("");
   const [sourceId, setSourceId] = useState("");
-  const [orderBy, setOrderBy] = useState(""); // backend uses id ASC if unset
+  const [orderBy, setOrderBy] = useState(""); // backend defaults to id ASC if unset
   const [orderDir, setOrderDir] = useState("ASC");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  // Lead Form Modal
+  // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
 
-  // Delete Confirmation Modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
 
-  // Assign Lead Modal
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [leadToAssign, setLeadToAssign] = useState(null);
   const [selectedAssignee, setSelectedAssignee] = useState(null);
-  const [managers, setManagers] = useState([]);
 
   // Prevent stale updates (race-safe)
   const fetchGuard = useRef(0);
 
+  // === API calls ===
   const fetchLeads = useCallback(
-    async (paramsOverride = {}) => {
+    async ({ page: pageParam } = {}) => {
       const fetchId = ++fetchGuard.current;
       setLoading(true);
       try {
         const params = {
-          page,
+          page: pageParam ?? 1,
           limit,
           status_id: statusId || undefined,
           source_id: sourceId || undefined,
           orderBy: orderBy || undefined,
           orderDir: orderDir || undefined,
           search: debouncedSearch || undefined,
-          ...paramsOverride,
         };
+
         const res = await API.private.getLeads(params);
         if (fetchId !== fetchGuard.current) return; // ignore stale responses
+
         if (res.data?.code === "OK") {
           setLeads(res.data.data.leads || []);
           setTotalPages(res.data.data.pagination.totalPages);
@@ -87,10 +91,10 @@ const AdminLeads = () => {
         if (fetchId === fetchGuard.current) setLoading(false);
       }
     },
-    [page, limit, statusId, sourceId, orderBy, orderDir, debouncedSearch]
+    [limit, statusId, sourceId, orderBy, orderDir, debouncedSearch]
   );
 
-  const fetchStatuses = async () => {
+  const fetchStatuses = useCallback(async () => {
     try {
       const res = await API.private.getLeadStatuses();
       if (res.data?.code === "OK") {
@@ -99,9 +103,9 @@ const AdminLeads = () => {
     } catch {
       Notification.error("Failed to fetch lead statuses");
     }
-  };
+  }, []);
 
-  const fetchSources = async () => {
+  const fetchSources = useCallback(async () => {
     try {
       const res = await API.private.getLeadSources();
       if (res.data?.code === "OK") {
@@ -110,9 +114,9 @@ const AdminLeads = () => {
     } catch {
       Notification.error("Failed to fetch lead sources");
     }
-  };
+  }, []);
 
-  const fetchManagersAndAdmins = async () => {
+  const fetchManagersAndAdmins = useCallback(async () => {
     try {
       const res = await API.private.getManagersAndAdmins();
       if (res.data?.code === "OK") {
@@ -121,30 +125,26 @@ const AdminLeads = () => {
     } catch {
       Notification.error("Failed to fetch assignees");
     }
-  };
+  }, []);
 
   // Initial loads
   useEffect(() => {
     fetchStatuses();
     fetchSources();
     fetchManagersAndAdmins();
-  }, []);
+  }, [fetchStatuses, fetchSources, fetchManagersAndAdmins]);
 
-  // Fetch leads when page changes
+  // Fetch when page changes (single fetch source of truth)
   useEffect(() => {
-    fetchLeads();
+    fetchLeads({ page });
   }, [page, fetchLeads]);
 
-  // Reset page on filter/sort/search change
+  // Reset page when filters/sort/search change (use prev form)
   useEffect(() => {
-    setPage(1);
+    setPage((prev) => (prev === 1 ? prev : 1));
   }, [statusId, sourceId, orderBy, orderDir, debouncedSearch]);
 
-  // Refetch when those dependencies change (after resetting page)
-  useEffect(() => {
-    fetchLeads({ page: 1 });
-  }, [statusId, sourceId, orderBy, orderDir, debouncedSearch, fetchLeads]);
-
+  // === Handlers ===
   const handleSubmit = async (data) => {
     setLoading(true);
     try {
@@ -155,7 +155,7 @@ const AdminLeads = () => {
         await API.private.createLead(data);
         Notification.success("Lead created successfully");
       }
-      fetchLeads();
+      await fetchLeads({ page }); // refresh current page once
       setIsModalOpen(false);
       setEditingLead(null);
     } catch (err) {
@@ -180,7 +180,7 @@ const AdminLeads = () => {
     try {
       await API.private.deleteLead(leadToDelete.id);
       Notification.success("Lead deleted successfully");
-      fetchLeads();
+      await fetchLeads({ page });
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to delete lead");
     } finally {
@@ -200,7 +200,7 @@ const AdminLeads = () => {
     try {
       await API.private.assignLead(leadToAssign.id, { assignee_id: selectedAssignee.id });
       Notification.success("Lead assigned successfully");
-      fetchLeads();
+      await fetchLeads({ page });
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to assign lead");
     } finally {
@@ -210,7 +210,6 @@ const AdminLeads = () => {
     }
   };
 
-  // Toolbar props
   const sortFields = useMemo(
     () => [
       { value: "", label: "Default (ID)" },
@@ -305,6 +304,7 @@ const AdminLeads = () => {
           )}
         </div>
 
+        {/* Modals */}
         <LeadFormModal
           isOpen={isModalOpen}
           onClose={() => {
