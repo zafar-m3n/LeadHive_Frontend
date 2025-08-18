@@ -7,12 +7,13 @@ import Table from "@/components/ui/Table";
 import IconComponent from "@/components/ui/Icon";
 import Heading from "@/components/ui/Heading";
 import AccentButton from "@/components/ui/AccentButton";
-import UserFormModal from "./components/UserFormModal";
+import TeamFormModal from "./components/TeamFormModal";
 import Modal from "@/components/ui/Modal";
 
-const ManageUsers = () => {
-  const [users, setUsers] = useState([]);
-  const [roles, setRoles] = useState([]);
+const ManageTeams = () => {
+  const [teams, setTeams] = useState([]);
+  const [managers, setManagers] = useState([]);
+  const [salesReps, setSalesReps] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Pagination
@@ -20,91 +21,121 @@ const ManageUsers = () => {
   const [limit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
 
-  // User Form Modal
+  // Team Form Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
+  const [editingTeam, setEditingTeam] = useState(null);
 
   // Delete Confirmation Modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [userToDelete, setUserToDelete] = useState(null);
+  const [teamToDelete, setTeamToDelete] = useState(null);
 
-  const fetchUsers = async (currentPage = page) => {
+  // ==========================
+  // Fetch Functions
+  // ==========================
+  const fetchTeams = async (currentPage = page) => {
     try {
-      const res = await API.private.getUsers({ params: { page: currentPage, limit } });
-      setUsers(res.data.data.users || []);
-      setTotalPages(res.data.data.pagination.totalPages);
+      const res = await API.private.getTeams(currentPage, limit);
+      setTeams(res.data.data.teams || []);
+      setTotalPages(res.data.data.pages);
     } catch (err) {
-      Notification.error(err.response?.data?.error || "Failed to fetch users");
+      Notification.error(err.response?.data?.error || "Failed to fetch teams");
     }
   };
 
-  const fetchRoles = async () => {
+  const fetchManagers = async () => {
     try {
-      const res = await API.private.getRoles();
-      setRoles(res.data.data.map((role) => ({ value: role.id, label: role.label })));
+      const res = await API.private.getManagers();
+      setManagers(res.data.data.map((m) => ({ value: m.id, label: m.full_name })));
     } catch (err) {
-      Notification.error("Failed to fetch roles");
+      Notification.error("Failed to fetch managers");
+    }
+  };
+
+  const fetchSalesReps = async () => {
+    try {
+      const res = await API.private.getUnassignedSalesReps();
+      setSalesReps(res.data.data.map((s) => ({ value: s.id, label: s.full_name })));
+    } catch (err) {
+      Notification.error("Failed to fetch sales reps");
     }
   };
 
   useEffect(() => {
-    fetchUsers(page);
+    fetchTeams(page);
   }, [page]);
 
   useEffect(() => {
-    fetchRoles();
+    fetchManagers();
+    fetchSalesReps();
   }, []);
 
-  // ✅ Handle add/edit user form submission
+  // ==========================
+  // CRUD Handlers
+  // ==========================
   const handleSubmit = async (data) => {
     setLoading(true);
     try {
-      if (editingUser) {
-        await API.private.updateUser(editingUser.id, data);
-        Notification.success("User updated successfully");
+      if (editingTeam) {
+        await API.private.updateTeam(editingTeam.id, data);
+        Notification.success("Team updated successfully");
       } else {
-        await API.private.createUser(data);
-        Notification.success("User created successfully");
+        await API.private.createTeam(data);
+        Notification.success("Team created successfully");
       }
-      fetchUsers();
+      fetchTeams();
       setIsModalOpen(false);
-      setEditingUser(null);
+      setEditingTeam(null);
     } catch (err) {
-      Notification.error(err.response?.data?.error || "Failed to save user");
+      Notification.error(err.response?.data?.error || "Failed to save team");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEdit = (user) => {
-    setEditingUser(user);
-    setIsModalOpen(true);
+  const handleEdit = async (team) => {
+    try {
+      // Fetch full team data including members
+      const res = await API.private.getTeamById(team.id);
+      const teamData = res.data.data;
+
+      setEditingTeam({
+        id: teamData.id,
+        name: teamData.name,
+        manager_id: teamData.manager?.id || null,
+        members: teamData.Users?.map((u) => u.id) || [],
+      });
+      setIsModalOpen(true);
+    } catch (err) {
+      Notification.error("Failed to fetch team details");
+    }
   };
 
-  const confirmDelete = (user) => {
-    setUserToDelete(user);
+  const confirmDelete = (team) => {
+    setTeamToDelete(team);
     setIsDeleteModalOpen(true);
   };
 
   const handleDelete = async () => {
-    if (!userToDelete) return;
+    if (!teamToDelete) return;
     try {
-      await API.private.deleteUser(userToDelete.id);
-      Notification.success("User deleted successfully");
-      fetchUsers();
+      await API.private.deleteTeam(teamToDelete.id);
+      Notification.success("Team deleted successfully");
+      fetchTeams();
     } catch (err) {
-      Notification.error(err.response?.data?.error || "Failed to delete user");
+      Notification.error(err.response?.data?.error || "Failed to delete team");
     } finally {
       setIsDeleteModalOpen(false);
-      setUserToDelete(null);
+      setTeamToDelete(null);
     }
   };
 
+  // ==========================
+  // Table Columns
+  // ==========================
   const columns = [
-    { key: "full_name", label: "Name" },
-    { key: "email", label: "Email" },
-    { key: "role", label: "Role" },
-    { key: "phone", label: "Phone" },
+    { key: "name", label: "Team Name" },
+    { key: "manager", label: "Manager" },
+    { key: "members", label: "Members" },
     { key: "actions", label: "Actions" },
   ];
 
@@ -113,29 +144,29 @@ const ManageUsers = () => {
       <div className="space-y-6">
         {/* Heading + Add Button */}
         <div className="flex justify-between items-center">
-          <Heading>Manage Users</Heading>
+          <Heading>Manage Teams</Heading>
           <div className="w-fit">
             <AccentButton
-              text="Add User"
+              text="Add Team"
               onClick={() => {
-                setEditingUser(null);
+                setEditingTeam(null);
                 setIsModalOpen(true);
               }}
             />
           </div>
         </div>
 
-        {/* Users Table */}
+        {/* Teams Table */}
         <Table
           columns={columns}
-          data={users}
-          emptyMessage="No users found."
+          data={teams}
+          emptyMessage="No teams found."
           renderCell={(row, col) => {
             switch (col.key) {
-              case "role":
-                return row.Role?.label || "-";
-              case "phone":
-                return row.phone && row.phone.length > 4 ? row.phone : "N/A";
+              case "manager":
+                return row.manager?.full_name || "-";
+              case "members":
+                return row.Users?.length || 0;
               case "actions":
                 return (
                   <div className="flex space-x-2">
@@ -160,20 +191,25 @@ const ManageUsers = () => {
             }
           }}
         />
+        {totalPages >= 1 && (
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} className="mt-4" />
+        )}
 
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} className="mt-4" />
-
-        <UserFormModal
+        {/* Form Modal */}
+        <TeamFormModal
           isOpen={isModalOpen}
           onClose={() => {
             setIsModalOpen(false);
-            setEditingUser(null);
+            setEditingTeam(null);
           }}
           onSubmit={handleSubmit}
-          editingUser={editingUser}
-          roles={roles}
+          editingTeam={editingTeam}
+          managers={managers}
+          salesReps={salesReps}
           loading={loading}
         />
+
+        {/* Delete Modal */}
         <Modal
           isOpen={isDeleteModalOpen}
           onClose={() => setIsDeleteModalOpen(false)}
@@ -181,7 +217,7 @@ const ManageUsers = () => {
           size="sm"
         >
           <p>
-            Are you sure you want to delete <span className="font-semibold">{userToDelete?.full_name}</span>?
+            Are you sure you want to delete <span className="font-semibold">{teamToDelete?.name}</span>?
           </p>
           <div className="flex justify-end gap-3 mt-4">
             <button onClick={() => setIsDeleteModalOpen(false)} className="text-sm px-4 py-1.5 rounded bg-gray-300">
@@ -197,4 +233,4 @@ const ManageUsers = () => {
   );
 };
 
-export default ManageUsers;
+export default ManageTeams;
