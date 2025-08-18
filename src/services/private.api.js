@@ -158,6 +158,57 @@ const removeMemberFromTeam = async (id, userId) => {
 };
 
 /* ========================== */
+/* Lead Functions             */
+/* ========================== */
+
+const createLead = async (data) => {
+  // { first_name?, last_name?, company?, email?, phone?, country?, status_id, source_id?, value_decimal?, notes? }
+  return await instance.apiClient.post("/api/v1/leads", data, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const getLeads = async (params = {}) => {
+  // params: { status_id?, source_id?, orderBy?, orderDir?, search?, page?, limit? }
+  return await instance.apiClient.get("/api/v1/leads", {
+    headers: instance.defaultHeaders(),
+    params,
+  });
+};
+
+const getLeadById = async (id) => {
+  return await instance.apiClient.get(`/api/v1/leads/${id}`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const updateLead = async (id, data) => {
+  // { first_name?, last_name?, company?, email?, phone?, country?, status_id?, source_id?, value_decimal?, notes? }
+  return await instance.apiClient.put(`/api/v1/leads/${id}`, data, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const deleteLead = async (id) => {
+  return await instance.apiClient.delete(`/api/v1/leads/${id}`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const assignLead = async (id, data) => {
+  // { assignee_id }
+  return await instance.apiClient.post(`/api/v1/leads/${id}/assign`, data, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const getLeadAssignments = async (id) => {
+  return await instance.apiClient.get(`/api/v1/leads/${id}/assignments`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+/* ========================== */
 /* Export API                 */
 /* ========================== */
 
@@ -191,6 +242,15 @@ const privateAPI = {
   deleteTeam,
   addMemberToTeam,
   removeMemberFromTeam,
+
+  // Leads
+  createLead,
+  getLeads,
+  getLeadById,
+  updateLead,
+  deleteLead,
+  assignLead,
+  getLeadAssignments,
 };
 
 export default privateAPI;
