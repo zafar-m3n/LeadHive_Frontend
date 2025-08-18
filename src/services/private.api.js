@@ -209,6 +209,23 @@ const getLeadAssignments = async (id) => {
 };
 
 /* ========================== */
+/* Lead Upload Functions      */
+/* ========================== */
+
+const getLeadTemplateSchema = async () => {
+  return await instance.apiClient.get("/api/v1/leads/upload/template", {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const importLeads = async (data) => {
+  // { leads: [ { first_name, last_name, company, email, phone, country, status, source, value_decimal, notes } ] }
+  return await instance.apiClient.post("/api/v1/leads/upload/import", data, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+/* ========================== */
 /* Export API                 */
 /* ========================== */
 
@@ -251,6 +268,10 @@ const privateAPI = {
   deleteLead,
   assignLead,
   getLeadAssignments,
+
+  // Leads Upload
+  getLeadTemplateSchema,
+  importLeads,
 };
 
 export default privateAPI;
