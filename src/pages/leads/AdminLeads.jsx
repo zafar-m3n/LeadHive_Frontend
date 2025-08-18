@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
 import Notification from "@/components/ui/Notification";
@@ -23,6 +24,7 @@ const useDebouncedValue = (value, delay = 300) => {
 };
 
 const AdminLeads = () => {
+  const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [statuses, setStatuses] = useState([]); // [{value,label}]
   const [sources, setSources] = useState([]); // [{value,label}]
@@ -250,14 +252,22 @@ const AdminLeads = () => {
         {/* Heading + Add Button */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <Heading>Admin Leads</Heading>
-          <div className="w-fit">
-            <AccentButton
-              text="Add Lead"
-              onClick={() => {
-                setEditingLead(null);
-                setIsModalOpen(true);
-              }}
-            />
+          <div className="flex space-x-2">
+            <div className="w-fit">
+              <AccentButton
+                text="Add Lead"
+                onClick={() => {
+                  setEditingLead(null);
+                  setIsModalOpen(true);
+                }}
+              />
+            </div>
+            <button
+              onClick={() => navigate("/admin/leads/import")}
+              className="px-4 py-2 rounded bg-black text-white font-medium hover:bg-gray-900 transition"
+            >
+              Import Leads
+            </button>
           </div>
         </div>
 

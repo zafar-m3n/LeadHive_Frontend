@@ -20,6 +20,7 @@ import ViewTeamPage from "@/pages/teams/ViewTeamPage";
 
 // Leads
 import AdminLeads from "@/pages/leads/AdminLeads";
+import LeadsImport from "@/pages/leads/LeadsImport";
 import ManagerLeads from "@/pages/leads/ManagerLeads";
 import SalesLeads from "@/pages/leads/SalesLeads";
 
@@ -58,6 +59,7 @@ function App() {
 
     // Leads
     { path: "/admin/leads", element: AdminLeads, roles: ["admin"] },
+    { path: "/admin/leads/import", element: LeadsImport, roles: ["admin"] },
     { path: "/manager/leads", element: ManagerLeads, roles: ["manager"] },
     { path: "/leads", element: SalesLeads, roles: ["sales_rep"] },
 
