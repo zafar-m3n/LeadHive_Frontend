@@ -1,6 +1,5 @@
 // src/pages/manager/ManagerLeads.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
 import Notification from "@/components/ui/Notification";
@@ -25,20 +24,11 @@ const useDebouncedValue = (value, delay = 300) => {
 };
 
 const ManagerLeads = () => {
-  const navigate = useNavigate();
-
-  // Data
   const [leads, setLeads] = useState([]);
-  const [statuses, setStatuses] = useState([]); // [{value,label}]
-  const [sources, setSources] = useState([]); // [{value,label}]
-  // NOTE: keep prop name "managers" to stay compatible with <LeadsTable/> API.
-  // Here it will actually contain: team members + admins (assignable users for manager)
+  const [statuses, setStatuses] = useState([]);
+  const [sources, setSources] = useState([]);
   const [managers, setManagers] = useState([]);
-
-  // UI
   const [loading, setLoading] = useState(false);
-
-  // Pagination
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
@@ -46,12 +36,11 @@ const ManagerLeads = () => {
   // Filters / Sorting / Search
   const [statusId, setStatusId] = useState("");
   const [sourceId, setSourceId] = useState("");
-  const [orderBy, setOrderBy] = useState(""); // backend defaults to id ASC if unset
+  const [orderBy, setOrderBy] = useState("");
   const [orderDir, setOrderDir] = useState("ASC");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
 
@@ -62,10 +51,8 @@ const ManagerLeads = () => {
   const [leadToAssign, setLeadToAssign] = useState(null);
   const [selectedAssignee, setSelectedAssignee] = useState(null);
 
-  // Prevent stale updates (race-safe)
   const fetchGuard = useRef(0);
 
-  // === API calls ===
   const fetchLeads = useCallback(
     async ({ page: pageParam } = {}) => {
       const fetchId = ++fetchGuard.current;
@@ -82,7 +69,7 @@ const ManagerLeads = () => {
         };
 
         const res = await API.private.getLeads(params);
-        if (fetchId !== fetchGuard.current) return; // ignore stale responses
+        if (fetchId !== fetchGuard.current) return;
 
         if (res.data?.code === "OK") {
           setLeads(res.data.data.leads || []);
@@ -119,7 +106,6 @@ const ManagerLeads = () => {
     }
   }, []);
 
-  // DIFFERENCE: managers fetch their assignable users (team members + admins)
   const fetchAssignableUsers = useCallback(async () => {
     try {
       const res = await API.private.getAssignableUsersForManager();
@@ -131,24 +117,20 @@ const ManagerLeads = () => {
     }
   }, []);
 
-  // Initial loads
   useEffect(() => {
     fetchStatuses();
     fetchSources();
     fetchAssignableUsers();
   }, [fetchStatuses, fetchSources, fetchAssignableUsers]);
 
-  // Fetch when page changes (single fetch source of truth)
   useEffect(() => {
     fetchLeads({ page });
   }, [page, fetchLeads]);
 
-  // Reset page when filters/sort/search change (use prev form)
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
   }, [statusId, sourceId, orderBy, orderDir, debouncedSearch]);
 
-  // === Handlers ===
   const handleSubmit = async (data) => {
     setLoading(true);
     try {
@@ -255,22 +237,14 @@ const ManagerLeads = () => {
         {/* Heading + Add Button */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <Heading>Manager Leads</Heading>
-          <div className="flex space-x-2">
-            <div className="w-fit">
-              <AccentButton
-                text="Add Lead"
-                onClick={() => {
-                  setEditingLead(null);
-                  setIsModalOpen(true);
-                }}
-              />
-            </div>
-            <button
-              onClick={() => navigate("/manager/leads/import")}
-              className="px-4 py-2 rounded bg-black text-white font-medium hover:bg-gray-900 transition"
-            >
-              Import Leads
-            </button>
+          <div className="w-fit">
+            <AccentButton
+              text="Add Lead"
+              onClick={() => {
+                setEditingLead(null);
+                setIsModalOpen(true);
+              }}
+            />
           </div>
         </div>
 
