@@ -232,6 +232,40 @@ const importLeads = async (data) => {
 };
 
 /* ========================== */
+/* Dashboard Functions        */
+/* ========================== */
+
+const getAdminDashboardSummary = async (params = {}) => {
+  // params: { recentLimit?: number }
+  return await instance.apiClient.get("/api/v1/dashboard/summary/admin", {
+    headers: instance.defaultHeaders(),
+    params,
+  });
+};
+
+const getManagerDashboardSummary = async (params = {}) => {
+  // params: { recentLimit?: number }
+  return await instance.apiClient.get("/api/v1/dashboard/summary/manager", {
+    headers: instance.defaultHeaders(),
+    params,
+  });
+};
+
+const getSalesRepDashboardSummary = async (params = {}) => {
+  // params: { recentLimit?: number }
+  return await instance.apiClient.get("/api/v1/dashboard/summary/sales_rep", {
+    headers: instance.defaultHeaders(),
+    params,
+  });
+};
+
+const getMyDashboardAssignments = async () => {
+  return await instance.apiClient.get("/api/v1/dashboard/assignments", {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+/* ========================== */
 /* Export API                 */
 /* ========================== */
 
@@ -279,6 +313,12 @@ const privateAPI = {
   // Leads Upload
   getLeadTemplateSchema,
   importLeads,
+
+  // Dashboard
+  getAdminDashboardSummary,
+  getManagerDashboardSummary,
+  getSalesRepDashboardSummary,
+  getMyDashboardAssignments,
 };
 
 export default privateAPI;
