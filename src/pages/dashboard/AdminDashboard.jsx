@@ -1,4 +1,3 @@
-// src/pages/admin/AdminDashboard.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
@@ -163,11 +162,11 @@ const AdminDashboard = () => {
               switch (col.key) {
                 case "status":
                   return (
-                    <Badge text={row.status} color={getStatusColor(row.status)} size="sm" rounded="rounded-full" />
+                    <Badge text={row.status} color={getStatusColor(row.status)} size="sm" rounded="rounded" />
                   );
                 case "source":
                   return (
-                    <Badge text={row.source} color={getSourceColor(row.source)} size="sm" rounded="rounded-full" />
+                    <Badge text={row.source} color={getSourceColor(row.source)} size="sm" rounded="rounded" />
                   );
                 case "created_at":
                   return new Date(row.created_at).toLocaleString();
