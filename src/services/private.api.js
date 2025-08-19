@@ -114,6 +114,13 @@ const getManagersAndAdmins = async () => {
   });
 };
 
+const getAssignableUsersForManager = async () => {
+  return await instance.apiClient.get("/api/v1/supports/users/assignable", {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+
 /* ========================== */
 /* Team Functions             */
 /* ========================== */
@@ -291,6 +298,7 @@ const privateAPI = {
   getTeamMembers,
   getUnassignedSalesReps,
   getManagersAndAdmins,
+  getAssignableUsersForManager,
 
   // Teams
   createTeam,
