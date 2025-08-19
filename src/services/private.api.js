@@ -278,6 +278,20 @@ const getMyDashboardAssignments = async () => {
   });
 };
 
+// Manager: get own team (with members)
+const getMyTeam = async () => {
+  return await instance.apiClient.get("/api/v1/teams/my", {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+// Manager: remove a member from own team
+const removeMemberFromMyTeam = async (userId) => {
+  return await instance.apiClient.delete(`/api/v1/teams/my/members/${userId}`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
 /* ========================== */
 /* Export API                 */
 /* ========================== */
@@ -334,6 +348,10 @@ const privateAPI = {
   getManagerDashboardSummary,
   getSalesRepDashboardSummary,
   getMyDashboardAssignments,
+
+  // Manager specific
+  getMyTeam,
+  removeMemberFromMyTeam,
 };
 
 export default privateAPI;

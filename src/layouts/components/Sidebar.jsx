@@ -23,6 +23,7 @@ const Sidebar = ({ menuOpen }) => {
   const managerItems = [
     { label: "Dashboard", icon: "mdi:view-dashboard-outline", path: "/manager/dashboard" },
     { label: "Team Leads", icon: "mdi:account-group-outline", path: "/manager/leads" },
+    { label: "My Team", icon: "mdi:users", path: "/manager/team" },
     // { label: "Reports", icon: "mdi:file-chart-outline", path: "/manager/reports" },
     { label: "Profile", icon: "mdi:account-circle-outline", path: "/manager/profile" },
     { label: "Logout", icon: "mdi:logout", action: "logout" },
