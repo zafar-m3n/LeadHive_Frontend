@@ -120,6 +120,12 @@ const getAssignableUsersForManager = async () => {
   });
 };
 
+// Supporting Data Functions (add this)
+const getMyManager = async () => {
+  return await instance.apiClient.get("/api/v1/supports/users/manager", {
+    headers: instance.defaultHeaders(),
+  });
+};
 
 /* ========================== */
 /* Team Functions             */
@@ -299,6 +305,7 @@ const privateAPI = {
   getUnassignedSalesReps,
   getManagersAndAdmins,
   getAssignableUsersForManager,
+  getMyManager,
 
   // Teams
   createTeam,

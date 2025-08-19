@@ -202,13 +202,15 @@ const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) 
                       >
                         <IconComponent icon="mdi:pencil" width={18} className="text-gray-800" />
                       </button>
-                      <button
-                        onClick={() => onDelete(row)}
-                        className="inline-flex items-center px-2 py-1 border border-gray-300 rounded hover:bg-gray-100"
-                        title="Delete"
-                      >
-                        <IconComponent icon="mdi:delete" width={18} className="text-gray-800" />
-                      </button>
+                      {onDelete && (
+                        <button
+                          onClick={() => onDelete(row)}
+                          className="inline-flex items-center px-2 py-1 border border-gray-300 rounded hover:bg-gray-100"
+                          title="Delete"
+                        >
+                          <IconComponent icon="mdi:delete" width={18} className="text-gray-800" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
