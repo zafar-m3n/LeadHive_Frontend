@@ -1,27 +1,103 @@
-import React, { useState, useEffect, useMemo } from "react";
+// src/pages/admin/components/LeadsTable.jsx
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import ReactDOM from "react-dom";
 import Badge from "@/components/ui/Badge";
 import IconComponent from "@/components/ui/Icon";
 import { getStatusColor, getSourceColor } from "@/utils/leadColors";
 import countryList from "react-select-country-list";
 
+const MENU_WIDTH = 260; // px
+const BASE_MAX_HEIGHT = 288; // px (~18rem) - slightly taller than before
+const MARGIN = 8;
+
 const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) => {
   const [dropdownOpen, setDropdownOpen] = useState(null); // lead.id
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+  const [dropdownPos, setDropdownPos] = useState({
+    top: 0,
+    left: 0,
+    placeAbove: false,
+    alignRight: false,
+    maxHeight: BASE_MAX_HEIGHT,
+  });
 
   // Country helper (react-select-country-list)
   const countries = useMemo(() => countryList(), []);
 
-  // Close dropdown when clicking outside
+  const closeDropdown = useCallback(() => setDropdownOpen(null), []);
+
+  // Close dropdown on outside click / Esc
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest(".assignee-trigger") && !e.target.closest(".assignee-portal-dropdown")) {
-        setDropdownOpen(null);
+        closeDropdown();
       }
     };
+    const handleEsc = (e) => {
+      if (e.key === "Escape") closeDropdown();
+    };
     document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
-  }, []);
+    document.addEventListener("keydown", handleEsc);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }, [closeDropdown]);
+
+  // Reposition on scroll/resize while open
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const updatePos = () => {
+      const trigger = document.querySelector(`[data-assignee-trigger="${dropdownOpen}"]`);
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      computeAndSetPosition(rect);
+    };
+    window.addEventListener("scroll", updatePos, true);
+    window.addEventListener("resize", updatePos);
+    return () => {
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
+    };
+  }, [dropdownOpen]);
+
+  const computeAndSetPosition = (rect) => {
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+
+    const spaceBelow = viewportH - rect.bottom - MARGIN;
+    const spaceAbove = rect.top - MARGIN;
+
+    // Decide whether to flip above
+    const placeAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
+
+    // Horizontal alignment: keep inside viewport
+    let left = rect.left + window.scrollX;
+    const overflowRight = left + MENU_WIDTH > window.scrollX + viewportW - MARGIN;
+    const alignRight = overflowRight;
+    if (alignRight) {
+      left = rect.right + window.scrollX - MENU_WIDTH;
+      if (left < MARGIN) left = MARGIN;
+    }
+
+    // Compute top position and maxHeight to prevent bottom/ top overflow
+    let top;
+    let maxAvailable;
+    if (placeAbove) {
+      top = rect.top + window.scrollY; // we'll translateY(-100%) in CSS
+      maxAvailable = Math.max(160, Math.min(BASE_MAX_HEIGHT, spaceAbove)); // don't shrink too tiny
+    } else {
+      top = rect.bottom + window.scrollY + 4;
+      maxAvailable = Math.max(160, Math.min(BASE_MAX_HEIGHT, spaceBelow));
+    }
+
+    setDropdownPos({
+      top,
+      left,
+      placeAbove,
+      alignRight,
+      maxHeight: maxAvailable,
+    });
+  };
 
   const getCurrentAssigneeName = (lead) => {
     const arr = lead?.LeadAssignments || [];
@@ -35,15 +111,11 @@ const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) 
     if (!raw) return "-";
     const t = String(raw).trim();
     if (!t) return "-";
-
-    // If 2-letter code, try to resolve to full label
     if (t.length === 2) {
       const code = t.toUpperCase();
       const label = countries.getLabel(code);
-      return label || code; // fallback to code if not found
+      return label || code;
     }
-
-    // Otherwise, assume it's already a name
     return t;
   };
 
@@ -52,10 +124,7 @@ const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) 
     if (dropdownOpen === lead.id) {
       setDropdownOpen(null); // close if same clicked again
     } else {
-      setDropdownPos({
-        top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX,
-      });
+      computeAndSetPosition(rect);
       setDropdownOpen(lead.id);
     }
   };
@@ -111,6 +180,7 @@ const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) 
                   </td>
                   <td className="px-3 py-2">
                     <button
+                      data-assignee-trigger={row.id}
                       onClick={(e) => toggleDropdown(row, e)}
                       className="flex items-center gap-1 text-gray-800 assignee-trigger"
                     >
@@ -150,16 +220,22 @@ const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) 
 
       {ReactDOM.createPortal(
         <div
-          className={`assignee-portal-dropdown font-manrope absolute w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] transform transition-all duration-200 origin-top ${
+          className={`assignee-portal-dropdown fixed w-[${MENU_WIDTH}px] bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] transform transition-all duration-200 font-dm-sans ${
             dropdownOpen
               ? "opacity-100 scale-100 visible pointer-events-auto"
               : "opacity-0 scale-95 invisible pointer-events-none"
-          }`}
-          style={{ top: dropdownPos.top, left: dropdownPos.left }}
+          } ${dropdownPos.placeAbove ? "origin-bottom -translate-y-full" : "origin-top"}`}
+          style={{
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            width: `${MENU_WIDTH}px`,
+          }}
+          role="listbox"
+          aria-hidden={!dropdownOpen}
         >
-          <div className="max-h-60 overflow-y-auto">
+          <div className="app-scrollbar overflow-y-auto" style={{ maxHeight: `${dropdownPos.maxHeight}px` }}>
             {managers.length === 0 ? (
-              <div className="px-3 py-2 text-gray-500 text-sm">No managers found</div>
+              <div className="px-3 py-2 text-gray-500 text-xs">No users found</div>
             ) : (
               managers.map((m) => (
                 <div
@@ -170,10 +246,10 @@ const LeadsTable = ({ leads, onEdit, onDelete, managers, onAssignOptionClick }) 
                     const lead = leads.find((l) => l.id === openId);
                     if (lead) onAssignOptionClick(lead, m);
                   }}
-                  className="px-3 py-2 text-sm hover:bg-indigo-50 cursor-pointer"
+                  className="px-3 py-2 text-xs hover:bg-indigo-50 cursor-pointer"
                 >
                   <span className="font-medium text-black">{m.full_name}</span>
-                  <div className="text-xs text-gray-500">{m.email}</div>
+                  <div className="text-[11px] text-gray-500">{m.email}</div>
                 </div>
               ))
             )}

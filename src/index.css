@@ -60,3 +60,26 @@
 .react-international-phone-country-selector-dropdown__list-item--focused {
   background-color: #f3f4f6 !important; /* gray-100 */
 }
+
+/* Reusable thin scrollbar */
+.app-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9; /* thumb track */
+}
+
+/* Chrome/Edge/Safari */
+.app-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+.app-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9; /* slate-100 */
+  border-radius: 8px;
+}
+.app-scrollbar::-webkit-scrollbar-thumb {
+  background: #94a3b8; /* slate-400 */
+  border-radius: 8px;
+  border: 2px solid #f1f5f9; /* padding effect */
+}
+.app-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b; /* slate-500 */
+}
