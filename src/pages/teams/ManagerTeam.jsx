@@ -18,7 +18,12 @@ const ManagerTeam = () => {
     try {
       setLoading(true);
       const res = await API.private.getMyTeam();
-      setTeam(res?.data?.data || null);
+      if (res?.data?.code === "OK") {
+        setTeam(res.data.data || null);
+      } else {
+        Notification.error(res?.data?.error || "Failed to fetch your team");
+        setTeam(null);
+      }
     } catch (err) {
       Notification.error(err?.response?.data?.error || "Failed to fetch your team");
       setTeam(null);
@@ -32,7 +37,7 @@ const ManagerTeam = () => {
   }, []);
 
   const members = useMemo(() => {
-    const list = team?.Users || [];
+    const list = team?.members || [];
     return [...list].sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
   }, [team]);
 
@@ -44,13 +49,17 @@ const ManagerTeam = () => {
   const handleRemove = async () => {
     if (!memberToRemove?.id) return;
     try {
-      await API.private.removeMemberFromMyTeam(memberToRemove.id);
-      Notification.success("Member removed");
-      // Optimistic update
-      setTeam((t) => ({
-        ...t,
-        Users: (t?.Users || []).filter((u) => u.id !== memberToRemove.id),
-      }));
+      const res = await API.private.removeMemberFromMyTeam(memberToRemove.id);
+      if (res?.data?.code === "OK") {
+        Notification.success("Member removed");
+        // Optimistic update
+        setTeam((t) => ({
+          ...t,
+          members: (t?.members || []).filter((u) => u.id !== memberToRemove.id),
+        }));
+      } else {
+        Notification.error(res?.data?.error || "Failed to remove member");
+      }
     } catch (err) {
       Notification.error(err?.response?.data?.error || "Failed to remove member");
     } finally {
@@ -62,7 +71,12 @@ const ManagerTeam = () => {
   if (loading) {
     return (
       <DefaultLayout>
-        <p className="text-gray-500">Loading your team…</p>
+        <div className="p-6 bg-white rounded-lg border border-gray-200">
+          <div className="flex items-center gap-2 text-gray-600">
+            <IconComponent icon="mdi:loading" width={20} className="animate-spin" />
+            <p>Loading your team…</p>
+          </div>
+        </div>
       </DefaultLayout>
     );
   }
@@ -91,24 +105,32 @@ const ManagerTeam = () => {
           </h1>
         </div>
 
-        {/* Manager Card (you) */}
+        {/* Managers (all) */}
         <div className="p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
           <h2 className="text-lg font-medium text-gray-700 flex items-center gap-2 mb-3">
             <IconComponent icon="mdi:account-tie" width={22} className="text-green-600" />
-            Manager
+            Managers {team.managers?.length ? `(${team.managers.length})` : ""}
           </h2>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 flex items-center justify-center rounded-full bg-green-100 text-green-700 font-semibold">
-              {team.manager?.full_name?.charAt(0)}
+
+          {team.managers && team.managers.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {team.managers.map((mgr) => (
+                <span
+                  key={mgr.id}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700"
+                  title={mgr.email}
+                >
+                  <IconComponent icon="mdi:account-tie" width={14} className="text-green-600" />
+                  {mgr.full_name}
+                </span>
+              ))}
             </div>
-            <div>
-              <p className="font-medium text-gray-800">{team.manager?.full_name}</p>
-              <p className="text-sm text-gray-500">{team.manager?.email}</p>
-            </div>
-          </div>
+          ) : (
+            <p className="text-gray-500 italic">No managers listed.</p>
+          )}
         </div>
 
-        {/* Members Grid (matches admin view styling) */}
+        {/* Members Grid */}
         <div className="p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
           <h2 className="text-lg font-medium text-gray-700 flex items-center gap-2 mb-4">
             <IconComponent icon="mdi:account-multiple" width={22} className="text-blue-600" />

@@ -13,10 +13,9 @@ import Modal from "@/components/ui/Modal";
 
 const ManageTeams = () => {
   const [teams, setTeams] = useState([]);
-  const [managers, setManagers] = useState([]);
-  const [salesReps, setSalesReps] = useState([]);
+  const [managerOptions, setManagerOptions] = useState([]); // [{ value, label }] - unassigned managers (merged during edit)
+  const [salesRepOptions, setSalesRepOptions] = useState([]); // [{ value, label }] - unassigned reps (merged during edit)
   const [loading, setLoading] = useState(false);
-  const [memberOptions, setMemberOptions] = useState([]);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -39,19 +38,42 @@ const ManageTeams = () => {
   const fetchTeams = async (currentPage = page) => {
     try {
       const res = await API.private.getTeams(currentPage, limit);
-      setTeams(res.data.data.teams || []);
-      setTotalPages(res.data.data.pages);
+      if (res?.data?.code === "OK") {
+        setTeams(res.data.data.teams || []);
+        setTotalPages(res.data.data.pages);
+      } else {
+        Notification.error(res?.data?.error || "Failed to fetch teams");
+      }
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to fetch teams");
     }
   };
 
-  const fetchManagers = async () => {
+  const fetchUnassignedManagers = async () => {
     try {
-      const res = await API.private.getManagers();
-      setManagers(res.data.data.map((m) => ({ value: m.id, label: m.full_name })));
+      const res = await API.private.getUnassignedManagers();
+      if (res?.data?.code === "OK") {
+        const unassigned = res.data.data.map((u) => ({ value: u.id, label: u.full_name }));
+        setManagerOptions(unassigned);
+      } else {
+        Notification.error(res?.data?.error || "Failed to fetch managers");
+      }
     } catch (err) {
       Notification.error("Failed to fetch managers");
+    }
+  };
+
+  const fetchUnassignedSalesReps = async () => {
+    try {
+      const res = await API.private.getUnassignedSalesReps();
+      if (res?.data?.code === "OK") {
+        const unassigned = res.data.data.map((s) => ({ value: s.id, label: s.full_name }));
+        setSalesRepOptions(unassigned);
+      } else {
+        Notification.error(res?.data?.error || "Failed to fetch sales reps");
+      }
+    } catch (err) {
+      Notification.error("Failed to fetch sales reps");
     }
   };
 
@@ -59,40 +81,40 @@ const ManageTeams = () => {
     fetchTeams(page);
   }, [page]);
 
-  const fetchSalesReps = async () => {
-    try {
-      const res = await API.private.getUnassignedSalesReps();
-      if (res.data.code === "OK") {
-        const unassigned = res.data.data.map((s) => ({ value: s.id, label: s.full_name }));
-        setSalesReps(unassigned);
-        setMemberOptions(unassigned);
-      }
-    } catch (err) {
-      console.log("error", err);
-      Notification.error("Failed to fetch sales reps");
-    }
-  };
-
   useEffect(() => {
-    fetchManagers();
-    fetchSalesReps();
+    // On initial mount, seed options with UNASSIGNED only (for "Add Team")
+    fetchUnassignedManagers();
+    fetchUnassignedSalesReps();
   }, []);
 
   // ==========================
   // CRUD Handlers
   // ==========================
   const handleSubmit = async (data) => {
+    // data from modal: { name, manager_ids: number[], members: number[] }
     setLoading(true);
     try {
       if (editingTeam) {
-        await API.private.updateTeam(editingTeam.id, data);
-        Notification.success("Team updated successfully");
+        const res = await API.private.updateTeam(editingTeam.id, data);
+        if (res?.data?.code === "OK") {
+          Notification.success("Team updated successfully");
+        } else {
+          Notification.error(res?.data?.error || "Failed to update team");
+          return;
+        }
       } else {
-        await API.private.createTeam(data);
-        Notification.success("Team created successfully");
+        const res = await API.private.createTeam(data);
+        if (res?.data?.code === "OK") {
+          Notification.success("Team created successfully");
+        } else {
+          Notification.error(res?.data?.error || "Failed to create team");
+          return;
+        }
       }
-      fetchTeams();
-      fetchSalesReps();
+      await fetchTeams();
+      // After changes, refresh UNASSIGNED lists
+      await fetchUnassignedManagers();
+      await fetchUnassignedSalesReps();
       setIsModalOpen(false);
       setEditingTeam(null);
     } catch (err) {
@@ -105,22 +127,32 @@ const ManageTeams = () => {
   const handleEdit = async (team) => {
     try {
       const res = await API.private.getTeamById(team.id);
+      if (res?.data?.code !== "OK") {
+        Notification.error(res?.data?.error || "Failed to fetch team details");
+        return;
+      }
       const teamData = res.data.data;
 
-      // Build options for current members
-      const currentMemberOptions = (teamData.Users || []).map((u) => ({ value: u.id, label: u.full_name })) || [];
+      // ===== Merge managers: unassigned + current team managers =====
+      const currentManagers = (teamData.managers || []).map((m) => ({ value: m.id, label: m.full_name }));
+      const mgrMap = new Map();
+      [...managerOptions, ...currentManagers].forEach((opt) => mgrMap.set(opt.value, opt));
+      const mergedManagerOptions = Array.from(mgrMap.values());
 
-      // Merge with unassigned sales reps (avoid duplicates)
-      const mergedMap = new Map();
-      [...salesReps, ...currentMemberOptions].forEach((opt) => mergedMap.set(opt.value, opt));
-      const mergedOptions = Array.from(mergedMap.values());
-      setMemberOptions(mergedOptions);
+      // ===== Merge members: unassigned + current team members =====
+      const currentMembers = (teamData.members || []).map((u) => ({ value: u.id, label: u.full_name }));
+      const memMap = new Map();
+      [...salesRepOptions, ...currentMembers].forEach((opt) => memMap.set(opt.value, opt));
+      const mergedMemberOptions = Array.from(memMap.values());
+
+      setManagerOptions(mergedManagerOptions);
+      setSalesRepOptions(mergedMemberOptions);
 
       setEditingTeam({
         id: teamData.id,
         name: teamData.name,
-        manager_id: teamData.manager?.id ?? "",
-        members: (teamData.Users || []).map((u) => u.id), // IDs only
+        manager_ids: (teamData.managers || []).map((m) => m.id),
+        members: (teamData.members || []).map((u) => u.id),
       });
 
       setIsModalOpen(true);
@@ -137,9 +169,16 @@ const ManageTeams = () => {
   const handleDelete = async () => {
     if (!teamToDelete) return;
     try {
-      await API.private.deleteTeam(teamToDelete.id);
-      Notification.success("Team deleted successfully");
-      fetchTeams();
+      const res = await API.private.deleteTeam(teamToDelete.id);
+      if (res?.data?.code === "OK") {
+        Notification.success("Team deleted successfully");
+        await fetchTeams();
+        // Refresh unassigned pools too
+        await fetchUnassignedManagers();
+        await fetchUnassignedSalesReps();
+      } else {
+        Notification.error(res?.data?.error || "Failed to delete team");
+      }
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to delete team");
     } finally {
@@ -157,10 +196,30 @@ const ManageTeams = () => {
   // ==========================
   const columns = [
     { key: "name", label: "Team Name" },
-    { key: "manager", label: "Manager" },
+    { key: "managers", label: "Managers" },
     { key: "members", label: "Members" },
     { key: "actions", label: "Actions" },
   ];
+
+  const renderManagersCell = (row) => {
+    const mgrs = row.managers || [];
+    if (mgrs.length === 0) return "-";
+
+    return (
+      <div className="flex flex-wrap gap-2">
+        {mgrs.map((m) => (
+          <span
+            key={m.id}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700"
+            title={m.email}
+          >
+            <IconComponent icon="mdi:account-tie" width={14} className="text-green-600" />
+            {m.full_name}
+          </span>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <DefaultLayout>
@@ -172,8 +231,11 @@ const ManageTeams = () => {
             <AccentButton
               text="Add Team"
               onClick={() => {
-                setEditingTeam(null);
-                setIsModalOpen(true);
+                // For "Add": ensure options are ONLY unassigned pools
+                Promise.all([fetchUnassignedManagers(), fetchUnassignedSalesReps()]).finally(() => {
+                  setEditingTeam(null);
+                  setIsModalOpen(true);
+                });
               }}
             />
           </div>
@@ -186,10 +248,10 @@ const ManageTeams = () => {
           emptyMessage="No teams found."
           renderCell={(row, col) => {
             switch (col.key) {
-              case "manager":
-                return row.manager?.full_name || "-";
+              case "managers":
+                return renderManagersCell(row);
               case "members":
-                return row.Users?.length || 0;
+                return row.members?.length || 0;
               case "actions":
                 return (
                   <div className="flex space-x-2">
@@ -221,6 +283,7 @@ const ManageTeams = () => {
             }
           }}
         />
+
         {totalPages >= 1 && (
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} className="mt-4" />
         )}
@@ -231,12 +294,14 @@ const ManageTeams = () => {
           onClose={() => {
             setIsModalOpen(false);
             setEditingTeam(null);
-            setMemberOptions(salesReps);
+            // Reset options back to UNASSIGNED pools so a subsequent "Add" starts clean
+            fetchUnassignedManagers();
+            fetchUnassignedSalesReps();
           }}
           onSubmit={handleSubmit}
           editingTeam={editingTeam}
-          managers={managers}
-          memberOptions={memberOptions}
+          managers={managerOptions}
+          memberOptions={salesRepOptions}
           loading={loading}
         />
 

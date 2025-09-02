@@ -24,13 +24,17 @@ const ViewTeamPage = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Managers + Sales reps (needed for edit)
-  const [managers, setManagers] = useState([]);
-  const [salesReps, setSalesReps] = useState([]);
+  const [managers, setManagers] = useState([]); // [{ value, label }]
+  const [salesReps, setSalesReps] = useState([]); // [{ value, label }]
 
   const fetchTeam = async () => {
     try {
       const res = await API.private.getTeamById(id);
-      setTeam(res.data.data);
+      if (res?.data?.code === "OK") {
+        setTeam(res.data.data);
+      } else {
+        Notification.error(res?.data?.error || "Failed to fetch team");
+      }
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to fetch team");
     } finally {
@@ -41,7 +45,11 @@ const ViewTeamPage = () => {
   const fetchManagers = async () => {
     try {
       const res = await API.private.getManagers();
-      setManagers(res.data.data.map((m) => ({ value: m.id, label: m.full_name })));
+      if (res?.data?.code === "OK") {
+        setManagers(res.data.data.map((m) => ({ value: m.id, label: m.full_name })));
+      } else {
+        Notification.error(res?.data?.error || "Failed to fetch managers");
+      }
     } catch {
       Notification.error("Failed to fetch managers");
     }
@@ -51,8 +59,13 @@ const ViewTeamPage = () => {
     const seedOptions = async () => {
       try {
         const res = await API.private.getUnassignedSalesReps();
-        const unassigned = res.data.data.map((s) => ({ value: s.id, label: s.full_name }));
-        setMemberOptions(unassigned);
+        if (res?.data?.code === "OK") {
+          const unassigned = res.data.data.map((s) => ({ value: s.id, label: s.full_name }));
+          setMemberOptions(unassigned);
+          setSalesReps(unassigned);
+        } else {
+          Notification.error(res?.data?.error || "Failed to fetch sales reps");
+        }
       } catch {
         Notification.error("Failed to fetch sales reps");
       }
@@ -68,31 +81,39 @@ const ViewTeamPage = () => {
   const handleEditClick = () => {
     if (!team) return;
 
-    // include current members in options
-    const currentMemberOptions = (team.Users || []).map((u) => ({ value: u.id, label: u.full_name })) || [];
+    // include current members in options (alias: members)
+    const currentMemberOptions = (team.members || []).map((u) => ({ value: u.id, label: u.full_name })) || [];
 
+    // merge with unassigned sales reps (avoid duplicates)
     const mergedMap = new Map();
-    [...memberOptions, ...currentMemberOptions].forEach((opt) => mergedMap.set(opt.value, opt));
+    [...salesReps, ...currentMemberOptions].forEach((opt) => mergedMap.set(opt.value, opt));
     const mergedOptions = Array.from(mergedMap.values());
     setMemberOptions(mergedOptions);
 
     setEditingTeam({
       id: team.id,
       name: team.name,
-      manager_id: team.manager?.id ?? "",
-      members: (team.Users || []).map((u) => u.id),
+      // managers is an array (alias: managers)
+      manager_ids: (team.managers || []).map((m) => m.id),
+      // members is an array (alias: members)
+      members: (team.members || []).map((u) => u.id),
     });
 
     setIsEditModalOpen(true);
   };
 
   const handleEditSubmit = async (data) => {
+    // data: { name, manager_ids: number[], members: number[] }
     try {
-      await API.private.updateTeam(team.id, data);
-      Notification.success("Team updated successfully");
-      setIsEditModalOpen(false);
-      setEditingTeam(null);
-      fetchTeam();
+      const res = await API.private.updateTeam(team.id, data);
+      if (res?.data?.code === "OK") {
+        Notification.success("Team updated successfully");
+        setIsEditModalOpen(false);
+        setEditingTeam(null);
+        fetchTeam();
+      } else {
+        Notification.error(res?.data?.error || "Failed to update team");
+      }
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to update team");
     }
@@ -100,9 +121,13 @@ const ViewTeamPage = () => {
 
   const handleDelete = async () => {
     try {
-      await API.private.deleteTeam(team.id);
-      Notification.success("Team deleted successfully");
-      navigate("/teams");
+      const res = await API.private.deleteTeam(team.id);
+      if (res?.data?.code === "OK") {
+        Notification.success("Team deleted successfully");
+        navigate("/admin/teams");
+      } else {
+        Notification.error(res?.data?.error || "Failed to delete team");
+      }
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to delete team");
     } finally {
@@ -125,6 +150,26 @@ const ViewTeamPage = () => {
       </DefaultLayout>
     );
   }
+
+  // Render helpers for managers list
+  const renderManagers = (mgrs = []) => {
+    if (!mgrs.length) return <p className="text-sm text-gray-500">No managers</p>;
+    return (
+      <ul className="flex flex-wrap gap-3">
+        {mgrs.map((m) => (
+          <li key={m.id} className="flex items-center gap-3">
+            <div className="w-10 h-10 flex items-center justify-center rounded-full bg-green-100 text-green-700 font-semibold">
+              {m.full_name?.charAt(0)}
+            </div>
+            <div>
+              <p className="font-medium text-gray-800 leading-tight">{m.full_name}</p>
+              <p className="text-sm text-gray-500 leading-tight">{m.email}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  };
 
   return (
     <DefaultLayout>
@@ -165,33 +210,25 @@ const ViewTeamPage = () => {
           </div>
         </div>
 
-        {/* Manager Card */}
+        {/* Managers Card (plural) */}
         <div className="p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
           <h2 className="text-lg font-medium text-gray-700 flex items-center gap-2 mb-3">
             <IconComponent icon="mdi:account-tie" width={22} className="text-green-600" />
-            Manager
+            Managers
           </h2>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 flex items-center justify-center rounded-full bg-green-100 text-green-700 font-semibold">
-              {team.manager?.full_name?.charAt(0)}
-            </div>
-            <div>
-              <p className="font-medium text-gray-800">{team.manager?.full_name}</p>
-              <p className="text-sm text-gray-500">{team.manager?.email}</p>
-            </div>
-          </div>
+          {renderManagers(team.managers)}
         </div>
 
         {/* Members Grid */}
         <div className="p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
           <h2 className="text-lg font-medium text-gray-700 flex items-center gap-2 mb-4">
             <IconComponent icon="mdi:account-multiple" width={22} className="text-blue-600" />
-            Members ({team.Users?.length || 0})
+            Members ({team.members?.length || 0})
           </h2>
 
-          {team.Users && team.Users.length > 0 ? (
+          {team.members && team.members.length > 0 ? (
             <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {team.Users.map((member) => (
+              {team.members.map((member) => (
                 <li
                   key={member.id}
                   className="flex items-center p-4 border border-gray-100 rounded-lg bg-gray-50 hover:bg-gray-100 transition"

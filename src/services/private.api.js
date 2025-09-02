@@ -108,6 +108,11 @@ const getUnassignedSalesReps = async () => {
     headers: instance.defaultHeaders(),
   });
 };
+const getUnassignedManagers = async () => {
+  return await instance.apiClient.get("/api/v1/supports/users/managers/unassigned", {
+    headers: instance.defaultHeaders(),
+  });
+};
 
 const getManagersAndAdmins = async () => {
   return await instance.apiClient.get("/api/v1/supports/users/managers-admins", {
@@ -318,6 +323,7 @@ const privateAPI = {
   getManagers,
   getTeamMembers,
   getUnassignedSalesReps,
+  getUnassignedManagers,
   getManagersAndAdmins,
   getAssignableUsersForManager,
   getMyManager,
