@@ -18,14 +18,24 @@ const schema = Yup.object().shape({
   email: Yup.string().email("Invalid email").required("Email is required"),
   password: Yup.string().when("isEdit", {
     is: false, // required only when adding
-    then: (schema) => schema.min(6, "Minimum 6 characters").required("Password is required"),
-    otherwise: (schema) => schema.notRequired(),
+    then: (s) => s.min(6, "Minimum 6 characters").required("Password is required"),
+    otherwise: (s) => s.notRequired(),
   }),
-  role_id: Yup.string().required("Role is required"),
+  // Allow number or string; we’ll coerce to number on submit
+  role_id: Yup.mixed().required("Role is required"),
   phone: Yup.string().nullable(),
 });
 
-const UserFormModal = ({ isOpen, onClose, onSubmit, formData, setFormData, editingUser, roles, loading }) => {
+const emptyValues = {
+  full_name: "",
+  email: "",
+  password: "",
+  role_id: "",
+  phone: "",
+  isEdit: false,
+};
+
+const UserFormModal = ({ isOpen, onClose, onSubmit, editingUser, roles, loading }) => {
   const {
     register,
     handleSubmit,
@@ -35,17 +45,30 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, formData, setFormData, editi
     formState: { errors },
   } = useForm({
     resolver: yupResolver(schema),
-    defaultValues: { ...formData, isEdit: !!editingUser },
+    defaultValues: emptyValues,
   });
 
-  // Sync formData with RHF whenever modal opens
+  // Reset and prefill when opening; clear when adding
   useEffect(() => {
-    reset({ ...formData, isEdit: !!editingUser });
-  }, [formData, editingUser, reset]);
+    if (!isOpen) return;
+
+    if (editingUser) {
+      reset({
+        full_name: editingUser.full_name || "",
+        email: editingUser.email || "",
+        role_id: editingUser.Role?.id ?? editingUser.role_id ?? "",
+        phone: editingUser.phone ?? "",
+        isEdit: true,
+      });
+    } else {
+      reset(emptyValues);
+    }
+  }, [isOpen, editingUser, reset]);
 
   const submitHandler = (data) => {
     onSubmit({
       ...data,
+      role_id: Number(data.role_id), // ensure numeric for backend
       phone: data.phone || null,
     });
   };
@@ -80,7 +103,7 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, formData, setFormData, editi
 
         <Select
           label="Role"
-          value={watch("role_id") || ""}
+          value={watch("role_id") ?? ""}
           onChange={(val) => setValue("role_id", val)}
           options={roles}
           placeholder="Select Role"
@@ -89,14 +112,20 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, formData, setFormData, editi
 
         <PhoneInput
           label="Phone"
-          value={watch("phone") || ""}
+          value={watch("phone") ?? ""}
           onChange={(val) => setValue("phone", val)}
           error={errors.phone?.message}
         />
 
         <div className="pt-4 flex justify-end gap-3">
           <div className="w-fit">
-            <GrayButton text="Cancel" onClick={onClose} />
+            <GrayButton
+              text="Cancel"
+              onClick={() => {
+                reset(emptyValues);
+                onClose();
+              }}
+            />
           </div>
           <div className="w-fit">
             <AccentButton type="submit" text={editingUser ? "Update User" : "Create User"} loading={loading} />

@@ -42,9 +42,10 @@ const createUser = async (data) => {
   });
 };
 
-const getUsers = async () => {
+const getUsers = async (params = {}) => {
   return await instance.apiClient.get("/api/v1/users", {
     headers: instance.defaultHeaders(),
+    params, // <-- forward page/limit
   });
 };
 
