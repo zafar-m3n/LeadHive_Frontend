@@ -133,6 +133,12 @@ const getMyManager = async () => {
   });
 };
 
+const getAssignees = async () => {
+  return await instance.apiClient.get("/api/v1/supports/users/assignees", {
+    headers: instance.defaultHeaders(),
+  });
+};
+
 /* ========================== */
 /* Team Functions             */
 /* ========================== */
@@ -327,6 +333,7 @@ const privateAPI = {
   getManagersAndAdmins,
   getAssignableUsersForManager,
   getMyManager,
+  getAssignees,
 
   // Teams
   createTeam,

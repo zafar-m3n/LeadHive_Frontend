@@ -124,6 +124,7 @@ const LeadsImport = () => {
       if (res.data?.success) {
         Notification.success(res.data.message || "Leads imported successfully");
         setResult(res.data);
+        navigate("/admin/leads");
       } else {
         Notification.error(res.data?.error || "Import failed");
         setResult(res.data);

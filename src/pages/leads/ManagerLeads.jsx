@@ -24,11 +24,17 @@ const useDebouncedValue = (value, delay = 300) => {
 };
 
 const ManagerLeads = () => {
+  // Data
   const [leads, setLeads] = useState([]);
   const [statuses, setStatuses] = useState([]);
   const [sources, setSources] = useState([]);
-  const [managers, setManagers] = useState([]);
+  const [managers, setManagers] = useState([]); // assignment list (scoped)
+  const [assigneeOptions, setAssigneeOptions] = useState([]); // filter list (full active users)
+
+  // UI
   const [loading, setLoading] = useState(false);
+
+  // Pagination
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
@@ -36,11 +42,13 @@ const ManagerLeads = () => {
   // Filters / Sorting / Search
   const [statusId, setStatusId] = useState("");
   const [sourceId, setSourceId] = useState("");
+  const [assigneeId, setAssigneeId] = useState(""); // NEW
   const [orderBy, setOrderBy] = useState("");
   const [orderDir, setOrderDir] = useState("ASC");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
 
+  // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
 
@@ -51,8 +59,10 @@ const ManagerLeads = () => {
   const [leadToAssign, setLeadToAssign] = useState(null);
   const [selectedAssignee, setSelectedAssignee] = useState(null);
 
+  // Prevent stale updates
   const fetchGuard = useRef(0);
 
+  // === API calls ===
   const fetchLeads = useCallback(
     async ({ page: pageParam } = {}) => {
       const fetchId = ++fetchGuard.current;
@@ -63,6 +73,7 @@ const ManagerLeads = () => {
           limit,
           status_id: statusId || undefined,
           source_id: sourceId || undefined,
+          assignee_id: assigneeId || undefined, // NEW (manager has full visibility per client)
           orderBy: orderBy || undefined,
           orderDir: orderDir || undefined,
           search: debouncedSearch || undefined,
@@ -81,7 +92,7 @@ const ManagerLeads = () => {
         if (fetchId === fetchGuard.current) setLoading(false);
       }
     },
-    [limit, statusId, sourceId, orderBy, orderDir, debouncedSearch]
+    [limit, statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch]
   );
 
   const fetchStatuses = useCallback(async () => {
@@ -106,6 +117,7 @@ const ManagerLeads = () => {
     }
   }, []);
 
+  // Assignment options (scoped): team members + admins + self
   const fetchAssignableUsers = useCallback(async () => {
     try {
       const res = await API.private.getAssignableUsersForManager();
@@ -117,20 +129,41 @@ const ManagerLeads = () => {
     }
   }, []);
 
+  // Assignee filter options (full active users): /assignees
+  const fetchAssignees = useCallback(async () => {
+    try {
+      const res = await API.private.getAssignees();
+      if (res.data?.code === "OK") {
+        const options = (res.data.data || []).map((u) => ({
+          value: u.id,
+          label: u.full_name ? `${u.full_name} (${u.email})` : u.email,
+        }));
+        setAssigneeOptions(options);
+      }
+    } catch {
+      Notification.error("Failed to fetch assignees");
+    }
+  }, []);
+
+  // Initial loads
   useEffect(() => {
     fetchStatuses();
     fetchSources();
-    fetchAssignableUsers();
-  }, [fetchStatuses, fetchSources, fetchAssignableUsers]);
+    fetchAssignableUsers(); // for Assign menu
+    fetchAssignees(); // for filter dropdown
+  }, [fetchStatuses, fetchSources, fetchAssignableUsers, fetchAssignees]);
 
+  // Fetch when page changes
   useEffect(() => {
     fetchLeads({ page });
   }, [page, fetchLeads]);
 
+  // Reset page when filters/sort/search change
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
-  }, [statusId, sourceId, orderBy, orderDir, debouncedSearch]);
+  }, [statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch]);
 
+  // === Handlers ===
   const handleSubmit = async (data) => {
     setLoading(true);
     try {
@@ -141,7 +174,7 @@ const ManagerLeads = () => {
         await API.private.createLead(data);
         Notification.success("Lead created successfully");
       }
-      await fetchLeads({ page }); // refresh current page
+      await fetchLeads({ page });
       setIsModalOpen(false);
       setEditingLead(null);
     } catch (err) {
@@ -219,6 +252,7 @@ const ManagerLeads = () => {
     if (Object.prototype.hasOwnProperty.call(partial, "search")) setSearch(partial.search);
     if (Object.prototype.hasOwnProperty.call(partial, "statusId")) setStatusId(partial.statusId);
     if (Object.prototype.hasOwnProperty.call(partial, "sourceId")) setSourceId(partial.sourceId);
+    if (Object.prototype.hasOwnProperty.call(partial, "assigneeId")) setAssigneeId(partial.assigneeId); // NEW
     if (Object.prototype.hasOwnProperty.call(partial, "orderBy")) setOrderBy(partial.orderBy);
     if (Object.prototype.hasOwnProperty.call(partial, "orderDir")) setOrderDir(partial.orderDir);
   };
@@ -226,6 +260,7 @@ const ManagerLeads = () => {
   const resetAllFilters = () => {
     setStatusId("");
     setSourceId("");
+    setAssigneeId(""); // NEW
     setOrderBy("");
     setOrderDir("ASC");
     setSearch("");
@@ -254,7 +289,9 @@ const ManagerLeads = () => {
           sources={sources}
           sortFields={sortFields}
           orderDirOptions={orderDirOptions}
-          values={{ search, statusId, sourceId, orderBy, orderDir }}
+          assigneeOptions={assigneeOptions} // NEW
+          showAssignee={true} // NEW
+          values={{ search, statusId, sourceId, assigneeId, orderBy, orderDir }} // NEW includes assigneeId
           onChange={handleToolbarChange}
           onResetAll={resetAllFilters}
         />
@@ -269,7 +306,7 @@ const ManagerLeads = () => {
                 leads={leads}
                 onEdit={handleEdit}
                 onDelete={confirmDelete}
-                managers={managers} // assignable users: team members + admins
+                managers={managers} // assignment list remains team+admins+self
                 onAssignOptionClick={handleAssignOptionClick}
               />
               <Pagination

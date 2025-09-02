@@ -8,11 +8,13 @@ const LeadsFiltersToolbar = ({
   sources = [],
   sortFields = [],
   orderDirOptions = [],
-  values = { search: "", statusId: "", sourceId: "", orderBy: "", orderDir: "ASC" },
+  assigneeOptions = [], // NEW
+  showAssignee = false, // NEW
+  values = { search: "", statusId: "", sourceId: "", assigneeId: "", orderBy: "", orderDir: "ASC" }, // NEW
   onChange,
   onResetAll,
 }) => {
-  const { search, statusId, sourceId, orderBy, orderDir } = values;
+  const { search, statusId, sourceId, assigneeId, orderBy, orderDir } = values;
 
   const getLabel = (arr, val) => arr.find((x) => String(x.value) === String(val))?.label;
 
@@ -20,17 +22,32 @@ const LeadsFiltersToolbar = ({
     const items = [];
     if (statusId) items.push({ key: "status", label: `Status: ${getLabel(statuses, statusId) || statusId}` });
     if (sourceId) items.push({ key: "source", label: `Source: ${getLabel(sources, sourceId) || sourceId}` });
+    if (showAssignee && assigneeId)
+      items.push({ key: "assignee", label: `Assignee: ${getLabel(assigneeOptions, assigneeId) || assigneeId}` }); // NEW
     if (orderBy) items.push({ key: "orderBy", label: `Sort: ${getLabel(sortFields, orderBy) || orderBy}` });
     if (orderDir !== "ASC") items.push({ key: "orderDir", label: `Dir: ${orderDir}` });
     if (search) items.push({ key: "search", label: `Search: “${search}”` });
     return items;
-  }, [search, statusId, sourceId, orderBy, orderDir, statuses, sources, sortFields]);
+  }, [
+    search,
+    statusId,
+    sourceId,
+    assigneeId,
+    orderBy,
+    orderDir,
+    statuses,
+    sources,
+    assigneeOptions,
+    sortFields,
+    showAssignee,
+  ]);
 
   const hasActiveFilters = chips.length > 0;
 
   const clearChip = (key) => {
     if (key === "status") onChange({ statusId: "" });
     if (key === "source") onChange({ sourceId: "" });
+    if (key === "assignee") onChange({ assigneeId: "" }); // NEW
     if (key === "orderBy") onChange({ orderBy: "" });
     if (key === "orderDir") onChange({ orderDir: "ASC" });
     if (key === "search") onChange({ search: "" });
@@ -83,46 +100,48 @@ const LeadsFiltersToolbar = ({
       </div>
 
       {/* Second row: Filters */}
-      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-12">
-        <div className="lg:col-span-3">
-          <Select
-            label="Status"
-            value={statusId}
-            onChange={(v) => onChange({ statusId: v })}
-            options={[{ value: "", label: "All" }, ...statuses]}
-            placeholder="All statuses"
-          />
-        </div>
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <Select
+          label="Status"
+          value={statusId}
+          onChange={(v) => onChange({ statusId: v })}
+          options={[{ value: "", label: "All" }, ...statuses]}
+          placeholder="All statuses"
+        />
 
-        <div className="lg:col-span-3">
-          <Select
-            label="Source"
-            value={sourceId}
-            onChange={(v) => onChange({ sourceId: v })}
-            options={[{ value: "", label: "All" }, ...sources]}
-            placeholder="All sources"
-          />
-        </div>
+        <Select
+          label="Source"
+          value={sourceId}
+          onChange={(v) => onChange({ sourceId: v })}
+          options={[{ value: "", label: "All" }, ...sources]}
+          placeholder="All sources"
+        />
 
-        <div className="lg:col-span-3">
+        {showAssignee && (
           <Select
-            label="Sort by"
-            value={orderBy}
-            onChange={(v) => onChange({ orderBy: v })}
-            options={sortFields}
-            placeholder="Default (ID)"
+            label="Assignee"
+            value={assigneeId}
+            onChange={(v) => onChange({ assigneeId: v })}
+            options={[{ value: "", label: "All" }, ...assigneeOptions]}
+            placeholder="All assignees"
           />
-        </div>
+        )}
 
-        <div className="lg:col-span-3">
-          <Select
-            label="Direction"
-            value={orderDir}
-            onChange={(v) => onChange({ orderDir: v })}
-            options={orderDirOptions}
-            placeholder="Ascending"
-          />
-        </div>
+        <Select
+          label="Sort by"
+          value={orderBy}
+          onChange={(v) => onChange({ orderBy: v })}
+          options={sortFields}
+          placeholder="Default (ID)"
+        />
+
+        <Select
+          label="Direction"
+          value={orderDir}
+          onChange={(v) => onChange({ orderDir: v })}
+          options={orderDirOptions}
+          placeholder="Ascending"
+        />
       </div>
 
       {/* Active Chips */}
@@ -138,7 +157,7 @@ const LeadsFiltersToolbar = ({
               <button
                 onClick={() => clearChip(chip.key)}
                 className="rounded-full p-0.5 hover:bg-black/5"
-                aria-label="Clear filter"
+                aria-label="Clear"
                 title="Clear"
               >
                 <IconComponent icon="mdi:close" width={14} className="text-gray-700" />

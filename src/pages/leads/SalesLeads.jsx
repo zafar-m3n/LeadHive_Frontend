@@ -1,3 +1,4 @@
+// src/pages/sales/SalesLeads.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
@@ -9,6 +10,7 @@ import LeadsTable from "./components/LeadsTable";
 import LeadsFiltersToolbar from "./components/LeadsFiltersToolbar";
 import ConfirmAssignModal from "./components/ConfirmAssignModal";
 import SalesLeadsModal from "./components/SalesLeadsModal";
+import IconComponent from "@/components/ui/Icon";
 
 /** Simple debounce hook */
 const useDebouncedValue = (value, delay = 300) => {
@@ -20,11 +22,62 @@ const useDebouncedValue = (value, delay = 300) => {
   return debounced;
 };
 
+/* ---------- Collapsible managers UI (hidden by default; no conditional rendering) ---------- */
+const ManagersList = ({ managers = [] }) => {
+  const [open, setOpen] = useState(false);
+
+  // Always render the card; content toggles via classes only
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+        type="button"
+      >
+        <span className="flex items-center gap-2">
+          <IconComponent icon="mdi:account-multiple" width={18} className="text-gray-700" />
+          Managers
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+            {managers.length}
+          </span>
+        </span>
+        <IconComponent icon={open ? "mdi:chevron-up" : "mdi:chevron-down"} width={18} />
+      </button>
+
+      {/* Content: hidden by default; switches to visible when open */}
+      <div
+        className={`${
+          open ? "visible max-h-[320px] opacity-100" : "hidden max-h-0 opacity-0"
+        } border-t border-gray-100 overflow-hidden transition-all duration-200`}
+      >
+        {managers.length === 0 ? (
+          <div className="px-3 py-2 text-sm text-gray-600">
+            <div className="flex items-center gap-2">
+              <IconComponent icon="mdi:account-alert-outline" width={18} />
+              <span className="italic">No manager assigned</span>
+            </div>
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {managers.map((m) => (
+              <li key={m.id} className="px-3 py-2">
+                <div className="truncate text-sm font-medium text-gray-900">{m.full_name || "Manager"}</div>
+                <div className="truncate text-xs text-gray-500">{m.email}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const SalesLeads = () => {
   const [leads, setLeads] = useState([]);
   const [statuses, setStatuses] = useState([]);
   const [sources, setSources] = useState([]);
-  const [myManager, setMyManager] = useState(null);
+  const [myManagers, setMyManagers] = useState([]); // array of managers
+  const [me, setMe] = useState(null); // current user profile (for selfId)
 
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -45,10 +98,11 @@ const SalesLeads = () => {
 
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [leadToAssign, setLeadToAssign] = useState(null);
-  const [selectedAssignee, setSelectedAssignee] = useState(null); // will be myManager
+  const [selectedAssignee, setSelectedAssignee] = useState(null);
 
   const fetchGuard = useRef(0);
 
+  // === API calls ===
   const fetchLeads = useCallback(
     async ({ page: pageParam } = {}) => {
       const fetchId = ++fetchGuard.current;
@@ -102,25 +156,37 @@ const SalesLeads = () => {
     }
   }, []);
 
-  const fetchMyManager = useCallback(async () => {
+  const fetchMyManagers = useCallback(async () => {
     try {
-      const res = await API.private.getMyManager();
-      if (res.data?.code === "OK") {
-        setMyManager(res.data.data || null); // a single manager object
+      const res = await API.private.getMyManager(); // returns array
+      if (res.data?.code === "OK" && Array.isArray(res.data.data)) {
+        setMyManagers(res.data.data);
       } else {
-        setMyManager(null);
+        setMyManagers([]);
       }
-    } catch (err) {
-      // If 404 (no team), we just keep it null to disable assignment
-      setMyManager(null);
+    } catch {
+      setMyManagers([]);
     }
   }, []);
 
+  const fetchProfile = useCallback(async () => {
+    try {
+      const res = await API.private.getProfile?.();
+      if (res?.data?.code === "OK") {
+        setMe(res.data.data);
+      }
+    } catch {
+      // ignore; selfId will be null and reassignment will be disabled
+    }
+  }, []);
+
+  // Initial loads
   useEffect(() => {
     fetchStatuses();
     fetchSources();
-    fetchMyManager();
-  }, [fetchStatuses, fetchSources, fetchMyManager]);
+    fetchMyManagers();
+    fetchProfile();
+  }, [fetchStatuses, fetchSources, fetchMyManagers, fetchProfile]);
 
   useEffect(() => {
     fetchLeads({ page });
@@ -130,6 +196,7 @@ const SalesLeads = () => {
     setPage((prev) => (prev === 1 ? prev : 1));
   }, [statusId, sourceId, orderBy, orderDir, debouncedSearch]);
 
+  // === Handlers ===
   const handleEdit = (lead) => {
     setEditingLead(lead);
     setIsModalOpen(true);
@@ -139,7 +206,6 @@ const SalesLeads = () => {
     if (!editingLead) return;
     setLoading(true);
     try {
-      // Only send fields the sales rep is allowed to change
       await API.private.updateLead(editingLead.id, { status_id, notes });
       Notification.success("Lead updated successfully");
       await fetchLeads({ page });
@@ -152,13 +218,14 @@ const SalesLeads = () => {
     }
   };
 
-  const handleAssignOptionClick = (lead /*, assigneeFromTable */) => {
-    if (!myManager) {
-      Notification.error("You are not assigned to a team/manager.");
+  // Table passes back the chosen manager
+  const handleAssignOptionClick = (lead, managerChoice) => {
+    if (!myManagers.length) {
+      Notification.error("You are not assigned to a manager.");
       return;
     }
     setLeadToAssign(lead);
-    setSelectedAssignee(myManager);
+    setSelectedAssignee(managerChoice || myManagers[0]);
     setIsAssignModalOpen(true);
   };
 
@@ -215,24 +282,15 @@ const SalesLeads = () => {
   return (
     <DefaultLayout>
       <div className="space-y-6">
-        {/* Heading (no Add button for sales reps) */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        {/* Heading + Managers */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <Heading>My Leads</Heading>
-          {/* Optionally show manager info */}
-          <div className="text-sm text-gray-600">
-            {myManager ? (
-              <span>
-                Manager:&nbsp;
-                <span className="font-medium text-gray-800">{myManager.full_name}</span>{" "}
-                <span className="text-gray-500">({myManager.email})</span>
-              </span>
-            ) : (
-              <span className="italic">No manager assigned</span>
-            )}
+          <div className="w-full md:w-auto md:min-w-[360px]">
+            <ManagersList managers={myManagers} />
           </div>
         </div>
 
-        {/* Filters & Search Toolbar */}
+        {/* Filters & Search */}
         <LeadsFiltersToolbar
           statuses={statuses}
           sources={sources}
@@ -253,8 +311,10 @@ const SalesLeads = () => {
                 leads={leads}
                 onEdit={handleEdit}
                 onDelete={null}
-                managers={myManager ? [myManager] : []}
+                managers={myManagers}
                 onAssignOptionClick={handleAssignOptionClick}
+                mode="sales"
+                selfId={me?.id || null}
               />
               <Pagination
                 currentPage={page}
@@ -279,7 +339,7 @@ const SalesLeads = () => {
           loading={loading}
         />
 
-        {/* Assign to Manager */}
+        {/* Confirm Assign */}
         <ConfirmAssignModal
           isOpen={isAssignModalOpen}
           lead={leadToAssign}

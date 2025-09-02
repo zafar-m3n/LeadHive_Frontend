@@ -14,6 +14,7 @@
     "@hookform/resolvers": "^5.1.1",
     "@iconify/react": "^6.0.0",
     "@tailwindcss/vite": "^4.1.11",
+    "@tippyjs/react": "^4.2.6",
     "axios": "^1.10.0",
     "crypto-browserify": "^3.12.1",
     "google-libphonenumber": "^3.2.42",

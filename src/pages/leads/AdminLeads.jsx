@@ -12,6 +12,7 @@ import LeadsTable from "./components/LeadsTable";
 import LeadsFiltersToolbar from "./components/LeadsFiltersToolbar";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import ConfirmAssignModal from "./components/ConfirmAssignModal";
+import token from "@/lib/utilities";
 
 /** Simple debounce hook */
 const useDebouncedValue = (value, delay = 300) => {
@@ -26,11 +27,17 @@ const useDebouncedValue = (value, delay = 300) => {
 const AdminLeads = () => {
   const navigate = useNavigate();
 
+  // Current user + role
+  const me = token.getUserData();
+  const role = me?.role.value;
+  const isAdminOrManager = role === "admin" || role === "manager";
+
   // Data
   const [leads, setLeads] = useState([]);
   const [statuses, setStatuses] = useState([]); // [{value,label}]
   const [sources, setSources] = useState([]); // [{value,label}]
-  const [managers, setManagers] = useState([]);
+  const [managers, setManagers] = useState([]); // used for Assign modal (unchanged)
+  const [assigneeOptions, setAssigneeOptions] = useState([]); // for filter dropdown
 
   // UI
   const [loading, setLoading] = useState(false);
@@ -43,6 +50,7 @@ const AdminLeads = () => {
   // Filters / Sorting / Search
   const [statusId, setStatusId] = useState("");
   const [sourceId, setSourceId] = useState("");
+  const [assigneeId, setAssigneeId] = useState(""); // NEW
   const [orderBy, setOrderBy] = useState(""); // backend defaults to id ASC if unset
   const [orderDir, setOrderDir] = useState("ASC");
   const [search, setSearch] = useState("");
@@ -73,6 +81,8 @@ const AdminLeads = () => {
           limit,
           status_id: statusId || undefined,
           source_id: sourceId || undefined,
+          // Only admins/managers can filter by assignee
+          assignee_id: isAdminOrManager && assigneeId ? assigneeId : undefined,
           orderBy: orderBy || undefined,
           orderDir: orderDir || undefined,
           search: debouncedSearch || undefined,
@@ -91,7 +101,7 @@ const AdminLeads = () => {
         if (fetchId === fetchGuard.current) setLoading(false);
       }
     },
-    [limit, statusId, sourceId, orderBy, orderDir, debouncedSearch]
+    [limit, statusId, sourceId, assigneeId, isAdminOrManager, orderBy, orderDir, debouncedSearch]
   );
 
   const fetchStatuses = useCallback(async () => {
@@ -116,6 +126,7 @@ const AdminLeads = () => {
     }
   }, []);
 
+  // Keep this for the Assign modal (unchanged)
   const fetchManagersAndAdmins = useCallback(async () => {
     try {
       const res = await API.private.getManagersAndAdmins();
@@ -127,12 +138,30 @@ const AdminLeads = () => {
     }
   }, []);
 
+  // NEW: Assignees for the filter dropdown (admins & managers share same scope: all active users)
+  const fetchAssignees = useCallback(async () => {
+    if (!isAdminOrManager) return;
+    try {
+      const res = await API.private.getAssignees();
+      if (res.data?.code === "OK") {
+        const options = (res.data.data || []).map((u) => ({
+          value: u.id,
+          label: u.full_name ? `${u.full_name} (${u.email})` : u.email,
+        }));
+        setAssigneeOptions(options);
+      }
+    } catch {
+      Notification.error("Failed to fetch assignees");
+    }
+  }, [isAdminOrManager]);
+
   // Initial loads
   useEffect(() => {
     fetchStatuses();
     fetchSources();
-    fetchManagersAndAdmins();
-  }, [fetchStatuses, fetchSources, fetchManagersAndAdmins]);
+    fetchManagersAndAdmins(); // for Assign modal
+    fetchAssignees(); // for filter dropdown (admin/manager only)
+  }, [fetchStatuses, fetchSources, fetchManagersAndAdmins, fetchAssignees]);
 
   // Fetch when page changes (single fetch source of truth)
   useEffect(() => {
@@ -142,7 +171,7 @@ const AdminLeads = () => {
   // Reset page when filters/sort/search change (use prev form)
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
-  }, [statusId, sourceId, orderBy, orderDir, debouncedSearch]);
+  }, [statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch]);
 
   // === Handlers ===
   const handleSubmit = async (data) => {
@@ -233,6 +262,7 @@ const AdminLeads = () => {
     if (Object.prototype.hasOwnProperty.call(partial, "search")) setSearch(partial.search);
     if (Object.prototype.hasOwnProperty.call(partial, "statusId")) setStatusId(partial.statusId);
     if (Object.prototype.hasOwnProperty.call(partial, "sourceId")) setSourceId(partial.sourceId);
+    if (Object.prototype.hasOwnProperty.call(partial, "assigneeId")) setAssigneeId(partial.assigneeId); // NEW
     if (Object.prototype.hasOwnProperty.call(partial, "orderBy")) setOrderBy(partial.orderBy);
     if (Object.prototype.hasOwnProperty.call(partial, "orderDir")) setOrderDir(partial.orderDir);
   };
@@ -240,6 +270,7 @@ const AdminLeads = () => {
   const resetAllFilters = () => {
     setStatusId("");
     setSourceId("");
+    setAssigneeId(""); // NEW
     setOrderBy("");
     setOrderDir("ASC");
     setSearch("");
@@ -276,7 +307,9 @@ const AdminLeads = () => {
           sources={sources}
           sortFields={sortFields}
           orderDirOptions={orderDirOptions}
-          values={{ search, statusId, sourceId, orderBy, orderDir }}
+          assigneeOptions={isAdminOrManager ? assigneeOptions : []} // NEW
+          showAssignee={isAdminOrManager} // NEW
+          values={{ search, statusId, sourceId, assigneeId, orderBy, orderDir }} // NEW includes assigneeId
           onChange={handleToolbarChange}
           onResetAll={resetAllFilters}
         />
