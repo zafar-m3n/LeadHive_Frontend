@@ -18,12 +18,14 @@ const ROLE = {
 };
 
 /**
- * mode:
- * - "manager" (default): manager can reassign only when current assignee is self/team (non-admin),
- *                        never when current assignee is admin.
- * - "sales":   sales rep can escalate to their manager(s) only when the current assignee is themself (role_id=3).
- *
- * selfId: required only for mode="sales" (the sales rep's user id).
+ * Props:
+ * - leads: list from backend (with LeadAssignments[].assignee.role_id)
+ * - managers: list of assignable users (naming kept for back-compat)
+ *     - Admin page: pass managers (or all users; component will filter to managers)
+ *     - Manager page: pass team members + self + admins
+ *     - Sales page: pass manager(s) of the rep
+ * - mode: "admin" | "manager" | "sales"
+ * - selfId: required for "sales"
  */
 const LeadsTable = ({
   leads,
@@ -43,7 +45,6 @@ const LeadsTable = ({
     alignRight: false,
     maxHeight: BASE_MAX_HEIGHT,
   });
-
   const [assigneeQuery, setAssigneeQuery] = useState("");
 
   // Country helper
@@ -154,41 +155,39 @@ const LeadsTable = ({
     }
   };
 
-  // Build assignable set (for manager mode we exclude admins as targets)
-  const nonAdminAssignable = useMemo(
-    () => managers.filter((u) => (typeof u.role_id === "number" ? u.role_id !== ROLE.ADMIN : true)),
+  // =========================
+  // Assignment targets
+  // =========================
+  const teamSet = useMemo(
+    () => new Set((managers || []).filter((u) => Number(u.role_id) !== ROLE.ADMIN).map((u) => u.id)),
     [managers]
   );
-  const assignableIds = useMemo(() => new Set(nonAdminAssignable.map((u) => u.id)), [nonAdminAssignable]);
 
-  // === Core rule: canReassign === using role_id on the current assignee
+  const dropdownTargets = useMemo(() => {
+    const list = managers || [];
+    return list;
+  }, [managers, mode, teamSet]);
+
+  // =========================
+  // Permission to open dropdown
+  // =========================
   const canReassign = (lead) => {
+    if (mode === "admin") return true;
     const current = getCurrentAssignee(lead);
     if (!current) return false;
-
-    // Block if currently under admin
-    if (current.role_id === ROLE.ADMIN) return false;
-
     if (mode === "manager") {
-      // Allowed only if current assignee is within manager's self/team set (non-admin)
-      return assignableIds.has(current.id);
+      return teamSet.has(current.id);
     }
-
     if (mode === "sales") {
-      // Sales rep can escalate only if they currently own it (and are a sales rep)
       if (!selfId) return false;
-      return current.role_id === ROLE.SALES_REP && current.id === selfId;
+      return Number(current.role_id) === ROLE.SALES_REP && Number(current.id) === Number(selfId);
     }
 
     return false;
   };
 
-  // Dropdown options:
-  // - manager mode: non-admin team/self (nonAdminAssignable)
-  // - sales mode: managers array (they’re managers by definition; API may not return role_id)
-  const dropdownTargets = mode === "manager" ? nonAdminAssignable : managers;
-
-  const filteredManagers = useMemo(() => {
+  // Filter dropdown options by search text
+  const filteredTargets = useMemo(() => {
     const q = assigneeQuery.trim().toLowerCase();
     if (!q) return dropdownTargets;
     return dropdownTargets.filter(
@@ -364,10 +363,10 @@ const LeadsTable = ({
           </div>
 
           <div className="app-scrollbar overflow-y-auto" style={{ maxHeight: `${dropdownPos.maxHeight - 44}px` }}>
-            {filteredManagers.length === 0 ? (
+            {filteredTargets.length === 0 ? (
               <div className="px-3 py-2 text-gray-500 text-xs">No users found</div>
             ) : (
-              filteredManagers.map((m) => {
+              filteredTargets.map((m) => {
                 const currentAssigneeId = openLead ? getCurrentAssignee(openLead)?.id ?? null : null;
                 const isCurrent = m.id === currentAssigneeId;
                 return (

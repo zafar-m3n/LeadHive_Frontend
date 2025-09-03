@@ -326,6 +326,7 @@ const AdminLeads = () => {
                 onDelete={confirmDelete}
                 managers={managers}
                 onAssignOptionClick={handleAssignOptionClick}
+                mode="admin"
               />
               <Pagination
                 currentPage={page}

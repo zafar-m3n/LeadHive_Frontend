@@ -305,6 +305,24 @@ const removeMemberFromMyTeam = async (userId) => {
 };
 
 /* ========================== */
+/* Bulk Lead Assignment       */
+/* ========================== */
+
+const getBulkAssignableTargets = async () => {
+  return await instance.apiClient.get("/api/v1/bulk/targets", {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+const bulkAssignLeads = async ({ lead_ids, assignee_id, overwrite = false }) => {
+  return await instance.apiClient.post(
+    "/api/v1/bulk/assign",
+    { lead_ids, assignee_id, overwrite },
+    { headers: instance.defaultHeaders() }
+  );
+};
+
+/* ========================== */
 /* Export API                 */
 /* ========================== */
 
@@ -366,6 +384,10 @@ const privateAPI = {
   // Manager specific
   getMyTeam,
   removeMemberFromMyTeam,
+
+  // Bulk Lead Assignment
+  getBulkAssignableTargets,
+  bulkAssignLeads,
 };
 
 export default privateAPI;
