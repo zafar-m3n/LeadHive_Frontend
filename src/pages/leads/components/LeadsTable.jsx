@@ -17,16 +17,6 @@ const ROLE = {
   SALES_REP: 3,
 };
 
-/**
- * Props:
- * - leads: list from backend (with LeadAssignments[].assignee.role_id)
- * - managers: list of assignable users (naming kept for back-compat)
- *     - Admin page: pass managers (or all users; component will filter to managers)
- *     - Manager page: pass team members + self + admins
- *     - Sales page: pass manager(s) of the rep
- * - mode: "admin" | "manager" | "sales"
- * - selfId: required for "sales"
- */
 const LeadsTable = ({
   leads,
   onEdit,
@@ -36,8 +26,8 @@ const LeadsTable = ({
   mode = "manager",
   selfId = null,
 }) => {
-  const [dropdownOpen, setDropdownOpen] = useState(null); // lead.id
-  const [openLead, setOpenLead] = useState(null); // full lead for open dropdown
+  const [dropdownOpen, setDropdownOpen] = useState(null);
+  const [openLead, setOpenLead] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({
     top: 0,
     left: 0,
@@ -47,8 +37,19 @@ const LeadsTable = ({
   });
   const [assigneeQuery, setAssigneeQuery] = useState("");
 
-  // Country helper
+  // Country helpers
   const countries = useMemo(() => countryList(), []);
+  const toCountryCode = useCallback(
+    (raw) => {
+      if (!raw) return "-";
+      const t = String(raw).trim();
+      if (!t) return "-";
+      if (t.length === 2) return t.toUpperCase();
+      const code = countries.getValue(t);
+      return code || "-";
+    },
+    [countries]
+  );
 
   const closeDropdown = useCallback(() => {
     setDropdownOpen(null);
@@ -56,7 +57,6 @@ const LeadsTable = ({
     setAssigneeQuery("");
   }, []);
 
-  // Outside click / Esc
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest(".assignee-trigger") && !e.target.closest(".assignee-portal-dropdown")) {
@@ -132,17 +132,6 @@ const LeadsTable = ({
   const getCurrentAssignee = (lead) => getLatestAssignment(lead)?.assignee || null;
   const getCurrentAssigneeName = (lead) => getCurrentAssignee(lead)?.full_name || "-";
 
-  const resolveCountry = (raw) => {
-    if (!raw) return "-";
-    const t = String(raw).trim();
-    if (!t) return "-";
-    if (t.length === 2) {
-      const code = t.toUpperCase();
-      return countries.getLabel(code) || code;
-    }
-    return t;
-  };
-
   const toggleDropdown = (lead, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     if (dropdownOpen === lead.id) {
@@ -195,18 +184,26 @@ const LeadsTable = ({
     );
   }, [assigneeQuery, dropdownTargets]);
 
+  // Fixed widths (px) for Lead, Company, Phone, Assignee
+  const W_LEAD = "w-[175px]";
+  const W_COMPANY = "w-[175px]";
+  const W_PHONE = "w-[100px]";
+  const W_ASSIGNEE = "w-[175px]";
+
   return (
     <div className="w-full overflow-x-auto rounded-lg border border-gray-200 relative">
+      {/* table-auto lets the unfixed columns (Status, Source, Country, Actions) flex to fill remaining space */}
       <table className="w-full table-auto text-sm leading-[1.25rem]">
         <thead className="bg-accent/20 uppercase tracking-wider">
           <tr className="text-[11px] text-gray-800 font-semibold">
-            <th className="px-3 py-2 text-left font-semibold">Lead</th>
-            <th className="px-3 py-2 text-left font-semibold">Company</th>
-            <th className="px-3 py-2 text-left font-semibold hidden md:table-cell">Phone</th>
+            <th className={`px-3 py-2 text-left font-semibold ${W_LEAD}`}>Lead</th>
+            <th className={`px-3 py-2 text-left font-semibold ${W_COMPANY}`}>Company</th>
+            <th className={`px-3 py-2 text-left font-semibold hidden md:table-cell ${W_PHONE}`}>Phone</th>
+            {/* Country: no fixed width, will fit 2-letter code */}
             <th className="px-3 py-2 text-left font-semibold hidden sm:table-cell">Country</th>
             <th className="px-3 py-2 text-left font-semibold">Status</th>
             <th className="px-3 py-2 text-left font-semibold hidden md:table-cell">Source</th>
-            <th className="px-3 py-2 text-left font-semibold">Assignee</th>
+            <th className={`px-3 py-2 text-left font-semibold ${W_ASSIGNEE}`}>Assignee</th>
             <th className="px-3 py-2 text-left font-semibold">Actions</th>
           </tr>
         </thead>
@@ -227,70 +224,88 @@ const LeadsTable = ({
               const sourceValue = row.LeadSource?.value || "";
               const phone = row.phone && row.phone.length > 4 ? row.phone : "N/A";
               const assigneeName = getCurrentAssigneeName(row);
+
+              // Accept either row.country_code or row.country (name), and show a 2-letter code
               const countryRaw = row.country_code ?? row.country;
-              const countryText = resolveCountry(countryRaw);
+              const countryCode = toCountryCode(countryRaw);
+
               const reassignable = canReassign(row);
 
               return (
                 <tr key={row.id} className="border-t border-gray-100 hover:bg-gray-50/70">
                   {/* Lead (Name + Email) */}
-                  <td className="px-3 py-2">
-                    <div className="flex flex-col">
-                      <span className="font-medium text-gray-900 truncate max-w-[240px]">{fullName}</span>
-                      <span className="text-xs text-gray-500 truncate max-w-[240px]">{row.email || "-"}</span>
+                  <td className="px-3 py-2 align-top">
+                    <div className={`flex flex-col overflow-hidden ${W_LEAD}`}>
+                      <span className="font-medium text-gray-900 truncate">{fullName}</span>
+                      <span className="text-xs text-gray-500 truncate">{row.email || "-"}</span>
                     </div>
                   </td>
 
                   {/* Company */}
-                  <td className="px-3 py-2">
-                    <span className="truncate block max-w-[220px]">{row.company || "-"}</span>
+                  <td className="px-3 py-2 align-top">
+                    <div className={`overflow-hidden ${W_COMPANY}`}>
+                      <span className="truncate block">{row.company || "-"}</span>
+                    </div>
                   </td>
 
                   {/* Phone */}
-                  <td className="px-3 py-2 whitespace-nowrap hidden md:table-cell">{phone}</td>
+                  <td className={`px-3 py-2 whitespace-nowrap hidden md:table-cell align-top ${W_PHONE}`}>
+                    <div className="overflow-hidden">
+                      <span className="truncate block">{phone}</span>
+                    </div>
+                  </td>
 
-                  {/* Country */}
-                  <td className="px-3 py-2 whitespace-nowrap hidden sm:table-cell text-gray-700">{countryText}</td>
+                  {/* Country (2-letter code, no fixed width) */}
+                  <td className="px-3 py-2 hidden sm:table-cell align-top">
+                    <span
+                      className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-xs font-mono ${
+                        countryCode === "-" ? "text-gray-500" : "bg-gray-100 text-gray-800 border border-gray-200"
+                      }`}
+                      title={countryCode}
+                    >
+                      {countryCode}
+                    </span>
+                  </td>
 
-                  {/* Status */}
-                  <td className="px-3 py-2">
+                  {/* Status (auto flex) */}
+                  <td className="px-3 py-2 align-top">
                     <Badge text={statusLabel} color={getStatusColor(statusValue)} size="sm" rounded="rounded" />
                   </td>
 
-                  {/* Source */}
-                  <td className="px-3 py-2 hidden md:table-cell">
+                  {/* Source (auto flex) */}
+                  <td className="px-3 py-2 hidden md:table-cell align-top">
                     <Badge text={sourceLabel} color={getSourceColor(sourceValue)} size="sm" rounded="rounded" />
                   </td>
 
-                  {/* Assignee */}
-                  <td className="px-3 py-2">
+                  {/* Assignee (fixed width + truncate) */}
+                  <td className={`px-3 py-2 align-top ${W_ASSIGNEE}`}>
                     {reassignable ? (
                       <Tooltip content="Change assignee" placement="top" theme="light">
                         <button
                           data-assignee-trigger={row.id}
                           onClick={(e) => toggleDropdown(row, e)}
-                          className="flex items-center gap-1 text-gray-800 assignee-trigger hover:text-black"
+                          className="flex items-center gap-1 text-gray-800 assignee-trigger hover:text-black overflow-hidden"
                           aria-label="Change assignee"
                         >
-                          <span className="truncate max-w-[160px]">{assigneeName}</span>
+                          <span className="truncate">{assigneeName}</span>
                           <IconComponent
                             icon="mdi:chevron-down"
                             width={18}
-                            className={`transition-transform duration-200 ${
+                            className={`shrink-0 transition-transform duration-200 ${
                               dropdownOpen === row.id ? "rotate-180" : ""
                             }`}
                           />
                         </button>
                       </Tooltip>
                     ) : (
-                      <div className="flex items-center gap-1 text-gray-500">
-                        <span className="truncate max-w-[160px]">{assigneeName}</span>
+                      <div className="flex items-center gap-1 text-gray-500 overflow-hidden">
+                        <span className="truncate">{assigneeName}</span>
                       </div>
                     )}
                   </td>
 
-                  {/* Actions */}
-                  <td className="px-3 py-2">
+                  {/* Actions (auto flex) */}
+                  <td className="px-3 py-2 align-top">
                     <div className="flex items-center gap-1.5">
                       <Tooltip content="Edit lead" placement="top" theme="light">
                         <button
@@ -383,12 +398,12 @@ const LeadsTable = ({
                     role="option"
                     aria-selected={isCurrent}
                   >
-                    <div>
-                      <span className="font-medium text-black">{m.full_name}</span>
-                      <div className="text-[11px] text-gray-500">{m.email}</div>
+                    <div className="min-w-0">
+                      <span className="font-medium text-black block truncate">{m.full_name}</span>
+                      <div className="text-[11px] text-gray-500 truncate">{m.email}</div>
                     </div>
                     {isCurrent && (
-                      <IconComponent icon="mdi:check-circle" width={16} className="text-indigo-600 mt-0.5" />
+                      <IconComponent icon="mdi:check-circle" width={16} className="text-indigo-600 mt-0.5 shrink-0" />
                     )}
                   </div>
                 );

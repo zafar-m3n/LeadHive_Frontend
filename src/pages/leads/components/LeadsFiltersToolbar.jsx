@@ -8,13 +8,23 @@ const LeadsFiltersToolbar = ({
   sources = [],
   sortFields = [],
   orderDirOptions = [],
-  assigneeOptions = [], // NEW
-  showAssignee = false, // NEW
-  values = { search: "", statusId: "", sourceId: "", assigneeId: "", orderBy: "", orderDir: "ASC" }, // NEW
+  assigneeOptions = [],
+  showAssignee = false,
+  values = {
+    search: "",
+    statusId: "",
+    sourceId: "",
+    assigneeId: "",
+    orderBy: "",
+    orderDir: "ASC",
+    limit: 25,
+  },
+  limitOptions = [],
+  onLimitChange, // NEW
   onChange,
   onResetAll,
 }) => {
-  const { search, statusId, sourceId, assigneeId, orderBy, orderDir } = values;
+  const { search, statusId, sourceId, assigneeId, orderBy, orderDir, limit } = values;
 
   const getLabel = (arr, val) => arr.find((x) => String(x.value) === String(val))?.label;
 
@@ -23,7 +33,7 @@ const LeadsFiltersToolbar = ({
     if (statusId) items.push({ key: "status", label: `Status: ${getLabel(statuses, statusId) || statusId}` });
     if (sourceId) items.push({ key: "source", label: `Source: ${getLabel(sources, sourceId) || sourceId}` });
     if (showAssignee && assigneeId)
-      items.push({ key: "assignee", label: `Assignee: ${getLabel(assigneeOptions, assigneeId) || assigneeId}` }); // NEW
+      items.push({ key: "assignee", label: `Assignee: ${getLabel(assigneeOptions, assigneeId) || assigneeId}` });
     if (orderBy) items.push({ key: "orderBy", label: `Sort: ${getLabel(sortFields, orderBy) || orderBy}` });
     if (orderDir !== "ASC") items.push({ key: "orderDir", label: `Dir: ${orderDir}` });
     if (search) items.push({ key: "search", label: `Search: “${search}”` });
@@ -47,11 +57,14 @@ const LeadsFiltersToolbar = ({
   const clearChip = (key) => {
     if (key === "status") onChange({ statusId: "" });
     if (key === "source") onChange({ sourceId: "" });
-    if (key === "assignee") onChange({ assigneeId: "" }); // NEW
+    if (key === "assignee") onChange({ assigneeId: "" });
     if (key === "orderBy") onChange({ orderBy: "" });
     if (key === "orderDir") onChange({ orderDir: "ASC" });
     if (key === "search") onChange({ search: "" });
   };
+
+  // Decide grid columns: +1 column if Assignee shown, +1 for Rows selector
+  const colsLg = showAssignee ? "lg:grid-cols-6" : "lg:grid-cols-5";
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -99,8 +112,8 @@ const LeadsFiltersToolbar = ({
         </div>
       </div>
 
-      {/* Second row: Filters */}
-      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+      {/* Second row: Filters + Rows per page (right) */}
+      <div className={`mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 ${colsLg}`}>
         <Select
           label="Status"
           value={statusId}
@@ -142,6 +155,9 @@ const LeadsFiltersToolbar = ({
           options={orderDirOptions}
           placeholder="Ascending"
         />
+
+        {/* NEW: Rows per page */}
+        <Select label="Rows per page" value={limit} onChange={onLimitChange} options={limitOptions} placeholder="25" />
       </div>
 
       {/* Active Chips */}

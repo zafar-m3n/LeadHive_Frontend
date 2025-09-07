@@ -44,13 +44,13 @@ const AdminLeads = () => {
 
   // Pagination
   const [page, setPage] = useState(1);
-  const [limit] = useState(10);
+  const [limit, setLimit] = useState(25); // DEFAULT 25
   const [totalPages, setTotalPages] = useState(1);
 
   // Filters / Sorting / Search
   const [statusId, setStatusId] = useState("");
   const [sourceId, setSourceId] = useState("");
-  const [assigneeId, setAssigneeId] = useState(""); // NEW
+  const [assigneeId, setAssigneeId] = useState("");
   const [orderBy, setOrderBy] = useState(""); // backend defaults to id ASC if unset
   const [orderDir, setOrderDir] = useState("ASC");
   const [search, setSearch] = useState("");
@@ -59,10 +59,8 @@ const AdminLeads = () => {
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
-
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
-
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [leadToAssign, setLeadToAssign] = useState(null);
   const [selectedAssignee, setSelectedAssignee] = useState(null);
@@ -81,7 +79,6 @@ const AdminLeads = () => {
           limit,
           status_id: statusId || undefined,
           source_id: sourceId || undefined,
-          // Only admins/managers can filter by assignee
           assignee_id: isAdminOrManager && assigneeId ? assigneeId : undefined,
           orderBy: orderBy || undefined,
           orderDir: orderDir || undefined,
@@ -89,7 +86,7 @@ const AdminLeads = () => {
         };
 
         const res = await API.private.getLeads(params);
-        if (fetchId !== fetchGuard.current) return; // ignore stale responses
+        if (fetchId !== fetchGuard.current) return;
 
         if (res.data?.code === "OK") {
           setLeads(res.data.data.leads || []);
@@ -159,19 +156,19 @@ const AdminLeads = () => {
   useEffect(() => {
     fetchStatuses();
     fetchSources();
-    fetchManagersAndAdmins(); // for Assign modal
-    fetchAssignees(); // for filter dropdown (admin/manager only)
+    fetchManagersAndAdmins();
+    fetchAssignees();
   }, [fetchStatuses, fetchSources, fetchManagersAndAdmins, fetchAssignees]);
 
-  // Fetch when page changes (single fetch source of truth)
+  // Fetch when page changes
   useEffect(() => {
     fetchLeads({ page });
   }, [page, fetchLeads]);
 
-  // Reset page when filters/sort/search change (use prev form)
+  // Reset page when filters/sort/search/limit change
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
-  }, [statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch]);
+  }, [statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch, limit]);
 
   // === Handlers ===
   const handleSubmit = async (data) => {
@@ -184,7 +181,7 @@ const AdminLeads = () => {
         await API.private.createLead(data);
         Notification.success("Lead created successfully");
       }
-      await fetchLeads({ page }); // refresh current page once
+      await fetchLeads({ page });
       setIsModalOpen(false);
       setEditingLead(null);
     } catch (err) {
@@ -258,11 +255,22 @@ const AdminLeads = () => {
     { value: "DESC", label: "Descending" },
   ];
 
+  const limitOptions = useMemo(
+    () => [
+      { value: 10, label: "10" },
+      { value: 25, label: "25" },
+      { value: 50, label: "50" },
+      { value: 100, label: "100" },
+      { value: 200, label: "200" },
+    ],
+    []
+  );
+
   const handleToolbarChange = (partial) => {
     if (Object.prototype.hasOwnProperty.call(partial, "search")) setSearch(partial.search);
     if (Object.prototype.hasOwnProperty.call(partial, "statusId")) setStatusId(partial.statusId);
     if (Object.prototype.hasOwnProperty.call(partial, "sourceId")) setSourceId(partial.sourceId);
-    if (Object.prototype.hasOwnProperty.call(partial, "assigneeId")) setAssigneeId(partial.assigneeId); // NEW
+    if (Object.prototype.hasOwnProperty.call(partial, "assigneeId")) setAssigneeId(partial.assigneeId);
     if (Object.prototype.hasOwnProperty.call(partial, "orderBy")) setOrderBy(partial.orderBy);
     if (Object.prototype.hasOwnProperty.call(partial, "orderDir")) setOrderDir(partial.orderDir);
   };
@@ -270,10 +278,17 @@ const AdminLeads = () => {
   const resetAllFilters = () => {
     setStatusId("");
     setSourceId("");
-    setAssigneeId(""); // NEW
+    setAssigneeId("");
     setOrderBy("");
     setOrderDir("ASC");
     setSearch("");
+  };
+
+  // Rows-per-page change (prev-state form)
+  const handleLimitChange = (newValue) => {
+    const next = Number(newValue) || 25;
+    setLimit((prev) => next);
+    setPage((prev) => 1);
   };
 
   return (
@@ -301,20 +316,22 @@ const AdminLeads = () => {
           </div>
         </div>
 
-        {/* Filters & Search Toolbar */}
+        {/* Filters & Search Toolbar (now includes Rows selector) */}
         <LeadsFiltersToolbar
           statuses={statuses}
           sources={sources}
           sortFields={sortFields}
           orderDirOptions={orderDirOptions}
-          assigneeOptions={isAdminOrManager ? assigneeOptions : []} // NEW
-          showAssignee={isAdminOrManager} // NEW
-          values={{ search, statusId, sourceId, assigneeId, orderBy, orderDir }} // NEW includes assigneeId
+          assigneeOptions={isAdminOrManager ? assigneeOptions : []}
+          showAssignee={isAdminOrManager}
+          values={{ search, statusId, sourceId, assigneeId, orderBy, orderDir, limit }}
+          limitOptions={limitOptions}
+          onLimitChange={handleLimitChange}
           onChange={handleToolbarChange}
           onResetAll={resetAllFilters}
         />
 
-        {/* Leads Table */}
+        {/* Leads Table + Pagination */}
         <div className="relative">
           {loading ? (
             <Spinner message="Loading leads..." />
@@ -329,10 +346,10 @@ const AdminLeads = () => {
                 mode="admin"
               />
               <Pagination
+                className="mt-2"
                 currentPage={page}
                 totalPages={totalPages}
                 onPageChange={(p) => setPage(p)}
-                className="mt-2"
               />
             </>
           )}
