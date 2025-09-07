@@ -323,6 +323,79 @@ const bulkAssignLeads = async ({ lead_ids, assignee_id, overwrite = false }) => 
 };
 
 /* ========================== */
+/* Lead Sources & Statuses    */
+/* (Admin CRUD)               */
+/* ========================== */
+
+// ----- Lead Sources (Admin) -----
+
+export const listAdminLeadSources = async (params = {}) => {
+  // params: { q?, page?, pageSize?, sortBy?, sortDir? }
+  return await instance.apiClient.get("/api/v1/lead/lead/sources", {
+    headers: instance.defaultHeaders(),
+    params,
+  });
+};
+
+export const getAdminLeadSourceById = async (id) => {
+  return await instance.apiClient.get(`/api/v1/lead/lead/sources/${id}`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+export const createAdminLeadSource = async ({ label }) => {
+  return await instance.apiClient.post("/api/v1/lead/lead/sources", { label }, { headers: instance.defaultHeaders() });
+};
+
+export const updateAdminLeadSource = async (id, { label }) => {
+  return await instance.apiClient.put(
+    `/api/v1/lead/lead/sources/${id}`,
+    { label },
+    { headers: instance.defaultHeaders() }
+  );
+};
+
+export const deleteAdminLeadSource = async (id) => {
+  return await instance.apiClient.delete(`/api/v1/lead/lead/sources/${id}`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+// ----- Lead Statuses (Admin) -----
+
+export const listAdminLeadStatuses = async (params = {}) => {
+  // params: { q?, page?, pageSize?, sortBy?, sortDir? }
+  return await instance.apiClient.get("/api/v1/lead/lead/statuses", {
+    headers: instance.defaultHeaders(),
+    params,
+  });
+};
+
+export const getAdminLeadStatusById = async (id) => {
+  return await instance.apiClient.get(`/api/v1/lead/lead/statuses/${id}`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+export const createAdminLeadStatus = async ({ label }) => {
+  return await instance.apiClient.post("/api/v1/lead/lead/statuses", { label }, { headers: instance.defaultHeaders() });
+};
+
+export const updateAdminLeadStatus = async (id, { label }) => {
+  return await instance.apiClient.put(
+    `/api/v1/lead/lead/statuses/${id}`,
+    { label },
+    { headers: instance.defaultHeaders() }
+  );
+};
+
+export const deleteAdminLeadStatus = async (id) => {
+  return await instance.apiClient.delete(`/api/v1/lead/lead/statuses/${id}`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
+/* ========================== */
 /* Export API                 */
 /* ========================== */
 
@@ -388,6 +461,18 @@ const privateAPI = {
   // Bulk Lead Assignment
   getBulkAssignableTargets,
   bulkAssignLeads,
+
+  // Admin: Lead Sources & Statuses
+  listAdminLeadSources,
+  getAdminLeadSourceById,
+  createAdminLeadSource,
+  updateAdminLeadSource,
+  deleteAdminLeadSource,
+  listAdminLeadStatuses,
+  getAdminLeadStatusById,
+  createAdminLeadStatus,
+  updateAdminLeadStatus,
+  deleteAdminLeadStatus,
 };
 
 export default privateAPI;

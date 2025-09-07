@@ -16,7 +16,7 @@ const Sidebar = ({ menuOpen }) => {
     { label: "Teams", icon: "mdi:users", path: "/admin/teams" },
     { label: "Leads", icon: "mdi:account-tie-outline", path: "/admin/leads" },
     // { label: "Reports", icon: "mdi:file-chart-outline", path: "/admin/reports" },
-    // { label: "Settings", icon: "mdi:cog-outline", path: "/admin/settings" },
+    { label: "Settings", icon: "mdi:cog-outline", path: "/admin/settings" },
     { label: "Logout", icon: "mdi:logout", action: "logout" },
   ];
 
