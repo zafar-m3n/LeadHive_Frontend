@@ -322,6 +322,15 @@ const bulkAssignLeads = async ({ lead_ids, assignee_id, overwrite = false }) => 
   );
 };
 
+// Bulk delete leads (Admin & Manager)
+const bulkDeleteLeads = async (lead_ids = []) => {
+  // Body must go in the `data` field for DELETE with axios
+  return await instance.apiClient.delete("/api/v1/bulk/delete", {
+    headers: instance.defaultHeaders(),
+    data: { lead_ids },
+  });
+};
+
 /* ========================== */
 /* Lead Sources & Statuses    */
 /* (Admin CRUD)               */
@@ -461,6 +470,7 @@ const privateAPI = {
   // Bulk Lead Assignment
   getBulkAssignableTargets,
   bulkAssignLeads,
+  bulkDeleteLeads,
 
   // Admin: Lead Sources & Statuses
   listAdminLeadSources,
