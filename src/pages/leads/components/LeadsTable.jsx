@@ -1,4 +1,3 @@
-// src/pages/admin/components/LeadsTable.jsx
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import ReactDOM from "react-dom";
 import Badge from "@/components/ui/Badge";
@@ -25,6 +24,12 @@ const LeadsTable = ({
   onAssignOptionClick,
   mode = "manager",
   selfId = null,
+
+  // Bulk selection
+  showSelection = false,
+  selectedIds = [],
+  onToggleSelect = () => {},
+  onToggleSelectAll = () => {},
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [openLead, setOpenLead] = useState(null);
@@ -185,21 +190,40 @@ const LeadsTable = ({
   }, [assigneeQuery, dropdownTargets]);
 
   // Fixed widths (px) for Lead, Company, Phone, Assignee
+  const W_SELECT = "w-[42px]";
   const W_LEAD = "w-[175px]";
   const W_COMPANY = "w-[175px]";
   const W_PHONE = "w-[100px]";
   const W_ASSIGNEE = "w-[175px]";
 
+  const allOnPageChecked = showSelection && leads.length > 0 && leads.every((l) => selectedIds.includes(l.id));
+  const someOnPageChecked =
+    showSelection && leads.length > 0 && leads.some((l) => selectedIds.includes(l.id)) && !allOnPageChecked;
+
   return (
     <div className="w-full overflow-x-auto rounded-lg border border-gray-200 relative">
-      {/* table-auto lets the unfixed columns (Status, Source, Country, Actions) flex to fill remaining space */}
       <table className="w-full table-auto text-sm leading-[1.25rem]">
         <thead className="bg-accent/20 uppercase tracking-wider">
           <tr className="text-[11px] text-gray-800 font-semibold">
+            {/* Selection */}
+            {showSelection && (
+              <th className={`px-2 py-2 text-left font-semibold ${W_SELECT}`}>
+                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300"
+                    checked={allOnPageChecked}
+                    ref={(el) => el && (el.indeterminate = someOnPageChecked)}
+                    onChange={(e) => onToggleSelectAll(e.target.checked)}
+                    aria-label="Select all rows on page"
+                  />
+                </label>
+              </th>
+            )}
+
             <th className={`px-3 py-2 text-left font-semibold ${W_LEAD}`}>Lead</th>
             <th className={`px-3 py-2 text-left font-semibold ${W_COMPANY}`}>Company</th>
             <th className={`px-3 py-2 text-left font-semibold hidden md:table-cell ${W_PHONE}`}>Phone</th>
-            {/* Country: no fixed width, will fit 2-letter code */}
             <th className="px-3 py-2 text-left font-semibold hidden sm:table-cell">Country</th>
             <th className="px-3 py-2 text-left font-semibold">Status</th>
             <th className="px-3 py-2 text-left font-semibold hidden md:table-cell">Source</th>
@@ -211,7 +235,7 @@ const LeadsTable = ({
         <tbody>
           {leads.length === 0 ? (
             <tr>
-              <td colSpan={8} className="px-3 py-6 text-center text-gray-500">
+              <td colSpan={showSelection ? 9 : 8} className="px-3 py-6 text-center text-gray-500">
                 No leads found.
               </td>
             </tr>
@@ -230,9 +254,23 @@ const LeadsTable = ({
               const countryCode = toCountryCode(countryRaw);
 
               const reassignable = canReassign(row);
+              const isChecked = selectedIds.includes(row.id);
 
               return (
                 <tr key={row.id} className="border-t border-gray-100 hover:bg-gray-50/70">
+                  {/* Row checkbox */}
+                  {showSelection && (
+                    <td className={`px-2 py-2 align-top ${W_SELECT}`}>
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300"
+                        checked={isChecked}
+                        onChange={() => onToggleSelect(row.id)}
+                        aria-label={`Select lead ${row.id}`}
+                      />
+                    </td>
+                  )}
+
                   {/* Lead (Name + Email) */}
                   <td className="px-3 py-2 align-top">
                     <div className={`flex flex-col overflow-hidden ${W_LEAD}`}>
@@ -255,7 +293,7 @@ const LeadsTable = ({
                     </div>
                   </td>
 
-                  {/* Country (2-letter code, no fixed width) */}
+                  {/* Country (2-letter code) */}
                   <td className="px-3 py-2 hidden sm:table-cell align-top">
                     <span
                       className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-xs font-mono ${
@@ -267,17 +305,17 @@ const LeadsTable = ({
                     </span>
                   </td>
 
-                  {/* Status (auto flex) */}
+                  {/* Status */}
                   <td className="px-3 py-2 align-top">
                     <Badge text={statusLabel} color={getStatusColor(statusValue)} size="sm" rounded="rounded" />
                   </td>
 
-                  {/* Source (auto flex) */}
+                  {/* Source */}
                   <td className="px-3 py-2 hidden md:table-cell align-top">
                     <Badge text={sourceLabel} color={getSourceColor(sourceValue)} size="sm" rounded="rounded" />
                   </td>
 
-                  {/* Assignee (fixed width + truncate) */}
+                  {/* Assignee */}
                   <td className={`px-3 py-2 align-top ${W_ASSIGNEE}`}>
                     {reassignable ? (
                       <Tooltip content="Change assignee" placement="top" theme="light">
@@ -304,7 +342,7 @@ const LeadsTable = ({
                     )}
                   </td>
 
-                  {/* Actions (auto flex) */}
+                  {/* Actions */}
                   <td className="px-3 py-2 align-top">
                     <div className="flex items-center gap-1.5">
                       <Tooltip content="Edit lead" placement="top" theme="light">
@@ -378,10 +416,8 @@ const LeadsTable = ({
           </div>
 
           <div className="app-scrollbar overflow-y-auto" style={{ maxHeight: `${dropdownPos.maxHeight - 44}px` }}>
-            {filteredTargets.length === 0 ? (
-              <div className="px-3 py-2 text-gray-500 text-xs">No users found</div>
-            ) : (
-              filteredTargets.map((m) => {
+            {(() => {
+              const list = (filteredTargets || []).map((m) => {
                 const currentAssigneeId = openLead ? getCurrentAssignee(openLead)?.id ?? null : null;
                 const isCurrent = m.id === currentAssigneeId;
                 return (
@@ -407,8 +443,10 @@ const LeadsTable = ({
                     )}
                   </div>
                 );
-              })
-            )}
+              });
+
+              return list.length ? list : <div className="px-3 py-2 text-gray-500 text-xs">No users found</div>;
+            })()}
           </div>
         </div>,
         document.body

@@ -12,6 +12,9 @@ import LeadsTable from "./components/LeadsTable";
 import LeadsFiltersToolbar from "./components/LeadsFiltersToolbar";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import ConfirmAssignModal from "./components/ConfirmAssignModal";
+import Modal from "@/components/ui/Modal";
+import Select from "@/components/form/Select";
+import GrayButton from "@/components/ui/GrayButton";
 import token from "@/lib/utilities";
 
 /** Simple debounce hook */
@@ -36,8 +39,19 @@ const AdminLeads = () => {
   const [leads, setLeads] = useState([]);
   const [statuses, setStatuses] = useState([]); // [{value,label}]
   const [sources, setSources] = useState([]); // [{value,label}]
-  const [managers, setManagers] = useState([]); // used for Assign modal (unchanged)
+  const [managers, setManagers] = useState([]); // used for per-row Assign dropdown (unchanged)
   const [assigneeOptions, setAssigneeOptions] = useState([]); // for filter dropdown
+
+  // Bulk targets (uses /bulk/targets)
+  const [bulkTargets, setBulkTargets] = useState([]); // [{id, full_name, email}]
+  const bulkTargetOptions = useMemo(
+    () =>
+      (bulkTargets || []).map((u) => ({
+        value: u.id,
+        label: u.full_name ? `${u.full_name} (${u.email})` : u.email,
+      })),
+    [bulkTargets]
+  );
 
   // UI
   const [loading, setLoading] = useState(false);
@@ -56,7 +70,7 @@ const AdminLeads = () => {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  // Modals
+  // Modals (single row)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -64,6 +78,18 @@ const AdminLeads = () => {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [leadToAssign, setLeadToAssign] = useState(null);
   const [selectedAssignee, setSelectedAssignee] = useState(null);
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState([]);
+  const hasSelection = selectedIds.length > 0;
+
+  // Bulk assign modal
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [bulkAssigneeId, setBulkAssigneeId] = useState("");
+  const [bulkOverwrite, setBulkOverwrite] = useState(false);
+
+  // Bulk delete modal
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   // Prevent stale updates (race-safe)
   const fetchGuard = useRef(0);
@@ -91,6 +117,8 @@ const AdminLeads = () => {
         if (res.data?.code === "OK") {
           setLeads(res.data.data.leads || []);
           setTotalPages(res.data.data.pagination.totalPages);
+          // Clear selections whenever page changes/fetch completes
+          setSelectedIds([]);
         }
       } catch (err) {
         Notification.error(err.response?.data?.error || "Failed to fetch leads");
@@ -123,7 +151,7 @@ const AdminLeads = () => {
     }
   }, []);
 
-  // Keep this for the Assign modal (unchanged)
+  // Keep this for the per-row Assign dropdown (unchanged)
   const fetchManagersAndAdmins = useCallback(async () => {
     try {
       const res = await API.private.getManagersAndAdmins();
@@ -135,7 +163,7 @@ const AdminLeads = () => {
     }
   }, []);
 
-  // NEW: Assignees for the filter dropdown (admins & managers share same scope: all active users)
+  // Assignees for the filter dropdown (admins & managers)
   const fetchAssignees = useCallback(async () => {
     if (!isAdminOrManager) return;
     try {
@@ -152,13 +180,27 @@ const AdminLeads = () => {
     }
   }, [isAdminOrManager]);
 
+  // Bulk assign targets
+  const fetchBulkTargets = useCallback(async () => {
+    if (!isAdminOrManager) return;
+    try {
+      const res = await API.private.getBulkAssignableTargets();
+      if (res?.data?.code === "OK" || res?.data?.success === true) {
+        setBulkTargets(res.data.data?.targets || []);
+      }
+    } catch {
+      // silent error; modal will show empty dropdown if needed
+    }
+  }, [isAdminOrManager]);
+
   // Initial loads
   useEffect(() => {
     fetchStatuses();
     fetchSources();
     fetchManagersAndAdmins();
     fetchAssignees();
-  }, [fetchStatuses, fetchSources, fetchManagersAndAdmins, fetchAssignees]);
+    fetchBulkTargets();
+  }, [fetchStatuses, fetchSources, fetchManagersAndAdmins, fetchAssignees, fetchBulkTargets]);
 
   // Fetch when page changes
   useEffect(() => {
@@ -170,7 +212,7 @@ const AdminLeads = () => {
     setPage((prev) => (prev === 1 ? prev : 1));
   }, [statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch, limit]);
 
-  // === Handlers ===
+  // === Handlers (single lead) ===
   const handleSubmit = async (data) => {
     setLoading(true);
     try {
@@ -236,6 +278,70 @@ const AdminLeads = () => {
     }
   };
 
+  // === Handlers (bulk) ===
+  const openBulkAssign = () => {
+    if (!hasSelection) {
+      Notification.error("Please select at least one lead.");
+      return;
+    }
+    setBulkAssigneeId("");
+    setBulkOverwrite(false);
+    setBulkAssignOpen(true);
+  };
+
+  const openBulkDelete = () => {
+    if (!hasSelection) {
+      Notification.error("Please select at least one lead.");
+      return;
+    }
+    setBulkDeleteOpen(true);
+  };
+
+  const executeBulkAssign = async () => {
+    if (!bulkAssigneeId) {
+      Notification.error("Please choose an assignee.");
+      return;
+    }
+    try {
+      await API.private.bulkAssignLeads({
+        lead_ids: selectedIds,
+        assignee_id: Number(bulkAssigneeId),
+        overwrite: !!bulkOverwrite,
+      });
+      Notification.success("Leads assigned successfully");
+      setBulkAssignOpen(false);
+      await fetchLeads({ page });
+    } catch (err) {
+      Notification.error(err.response?.data?.error || "Bulk assign failed");
+    }
+  };
+
+  const executeBulkDelete = async () => {
+    try {
+      await API.private.bulkDeleteLeads(selectedIds);
+      Notification.success("Leads deleted successfully");
+      setBulkDeleteOpen(false);
+      await fetchLeads({ page });
+    } catch (err) {
+      Notification.error(err.response?.data?.error || "Bulk delete failed");
+    }
+  };
+
+  // Bulk selection handlers passed to table
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+  const toggleSelectAll = (idsOnPage, checked) => {
+    if (checked) {
+      // add all not already present
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...idsOnPage])));
+    } else {
+      // remove all ids from this page
+      setSelectedIds((prev) => prev.filter((id) => !idsOnPage.includes(id)));
+    }
+  };
+
+  // Sorting choices
   const sortFields = useMemo(
     () => [
       { value: "", label: "Default (ID)" },
@@ -291,13 +397,33 @@ const AdminLeads = () => {
     setPage((prev) => 1);
   };
 
+  const idsOnCurrentPage = useMemo(() => leads.map((l) => l.id), [leads]);
+
   return (
     <DefaultLayout>
       <div className="space-y-6">
-        {/* Heading + Add Button */}
+        {/* Heading + Add/Import Buttons */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <Heading>Admin Leads</Heading>
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap gap-2">
+            {isAdminOrManager && (
+              <>
+                <button
+                  onClick={openBulkAssign}
+                  className="px-4 py-2 rounded bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition disabled:opacity-50"
+                  disabled={!hasSelection}
+                >
+                  Assign Selected
+                </button>
+                <button
+                  onClick={openBulkDelete}
+                  className="px-4 py-2 rounded bg-red-600 text-white font-medium hover:bg-red-700 transition disabled:opacity-50"
+                  disabled={!hasSelection}
+                >
+                  Delete Selected
+                </button>
+              </>
+            )}
             <div className="w-fit">
               <AccentButton
                 text="Add Lead"
@@ -331,6 +457,13 @@ const AdminLeads = () => {
           onResetAll={resetAllFilters}
         />
 
+        {/* Selected counter (subtle) */}
+        {hasSelection && (
+          <div className="text-sm text-gray-600">
+            <span className="font-medium">{selectedIds.length}</span> selected on this page.
+          </div>
+        )}
+
         {/* Leads Table + Pagination */}
         <div className="relative">
           {loading ? (
@@ -344,6 +477,11 @@ const AdminLeads = () => {
                 managers={managers}
                 onAssignOptionClick={handleAssignOptionClick}
                 mode="admin"
+                // bulk selection
+                showSelection={true}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+                onToggleSelectAll={(checked) => toggleSelectAll(idsOnCurrentPage, checked)}
               />
               <Pagination
                 className="mt-2"
@@ -355,7 +493,7 @@ const AdminLeads = () => {
           )}
         </div>
 
-        {/* Modals */}
+        {/* Single-Item Modals */}
         <LeadFormModal
           isOpen={isModalOpen}
           onClose={() => {
@@ -383,6 +521,67 @@ const AdminLeads = () => {
           onCancel={() => setIsAssignModalOpen(false)}
           onConfirm={handleAssign}
         />
+
+        {/* ===== Bulk Assign Modal ===== */}
+        <Modal isOpen={bulkAssignOpen} onClose={() => setBulkAssignOpen(false)} title="Assign Selected Leads" size="sm">
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              You’re assigning <span className="font-semibold">{selectedIds.length}</span> selected lead
+              {selectedIds.length > 1 ? "s" : ""}.
+            </p>
+
+            <Select
+              label="Assign to"
+              value={bulkAssigneeId}
+              onChange={(val) => setBulkAssigneeId(val)}
+              options={bulkTargetOptions}
+              placeholder="Choose user…"
+            />
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="rounded border-gray-300"
+                checked={bulkOverwrite}
+                onChange={(e) => setBulkOverwrite(e.target.checked)}
+              />
+              Overwrite existing assignees (otherwise, already-assigned leads will be skipped)
+            </label>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <div className="w-fit">
+                <GrayButton text="Cancel" onClick={() => setBulkAssignOpen(false)} />
+              </div>
+              <div className="w-fit">
+                <AccentButton text="Assign" onClick={executeBulkAssign} />
+              </div>
+            </div>
+          </div>
+        </Modal>
+
+        {/* ===== Bulk Delete Modal ===== */}
+        <Modal isOpen={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} title="Delete Selected Leads" size="sm">
+          <div className="space-y-4">
+            <p className="text-sm text-gray-700">
+              This will permanently delete <span className="font-semibold">{selectedIds.length}</span> lead
+              {selectedIds.length > 1 ? "s" : ""}. This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setBulkDeleteOpen(false)}
+                className="text-sm px-4 py-1.5 rounded bg-gray-300 hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeBulkDelete}
+                className="text-sm px-4 py-1.5 rounded bg-red-600 text-white hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </DefaultLayout>
   );
