@@ -81,7 +81,7 @@ const SalesLeads = () => {
 
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
-  const [limit] = useState(10);
+  const [limit, setLimit] = useState(25); // rows-per-page (same pattern as Admin/Manager)
   const [totalPages, setTotalPages] = useState(1);
 
   // Filters / Sorting / Search
@@ -90,6 +90,8 @@ const SalesLeads = () => {
   const [orderBy, setOrderBy] = useState("");
   const [orderDir, setOrderDir] = useState("ASC");
   const [search, setSearch] = useState("");
+  const [assignedFrom, setAssignedFrom] = useState(""); // NEW
+  const [assignedTo, setAssignedTo] = useState(""); // NEW
   const debouncedSearch = useDebouncedValue(search, 300);
 
   // Modals
@@ -116,6 +118,8 @@ const SalesLeads = () => {
           orderBy: orderBy || undefined,
           orderDir: orderDir || undefined,
           search: debouncedSearch || undefined,
+          assigned_from: assignedFrom || undefined, // NEW
+          assigned_to: assignedTo || undefined, // NEW
         };
 
         const res = await API.private.getLeads(params);
@@ -131,7 +135,7 @@ const SalesLeads = () => {
         if (fetchId === fetchGuard.current) setLoading(false);
       }
     },
-    [limit, statusId, sourceId, orderBy, orderDir, debouncedSearch]
+    [limit, statusId, sourceId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo]
   );
 
   const fetchStatuses = useCallback(async () => {
@@ -192,9 +196,10 @@ const SalesLeads = () => {
     fetchLeads({ page });
   }, [page, fetchLeads]);
 
+  // reset page when filters/sort/search/date range/limit change
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
-  }, [statusId, sourceId, orderBy, orderDir, debouncedSearch]);
+  }, [statusId, sourceId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo, limit]);
 
   // === Handlers ===
   const handleEdit = (lead) => {
@@ -254,6 +259,7 @@ const SalesLeads = () => {
       { value: "value_decimal", label: "Value" },
       { value: "created_at", label: "Created at" },
       { value: "updated_at", label: "Updated at" },
+      { value: "assigned_at", label: "Assigned at (latest)" }, // NEW
     ],
     []
   );
@@ -263,12 +269,32 @@ const SalesLeads = () => {
     { value: "DESC", label: "Descending" },
   ];
 
+  // Same limit options as Admin/Manager views
+  const limitOptions = useMemo(
+    () => [
+      { value: 10, label: "10" },
+      { value: 25, label: "25" },
+      { value: 50, label: "50" },
+      { value: 100, label: "100" },
+      { value: 200, label: "200" },
+    ],
+    []
+  );
+
+  const handleLimitChange = (newValue) => {
+    const next = Number(newValue) || 25;
+    setLimit(next);
+    setPage(1);
+  };
+
   const handleToolbarChange = (partial) => {
     if (Object.prototype.hasOwnProperty.call(partial, "search")) setSearch(partial.search);
     if (Object.prototype.hasOwnProperty.call(partial, "statusId")) setStatusId(partial.statusId);
     if (Object.prototype.hasOwnProperty.call(partial, "sourceId")) setSourceId(partial.sourceId);
     if (Object.prototype.hasOwnProperty.call(partial, "orderBy")) setOrderBy(partial.orderBy);
     if (Object.prototype.hasOwnProperty.call(partial, "orderDir")) setOrderDir(partial.orderDir);
+    if (Object.prototype.hasOwnProperty.call(partial, "assignedFrom")) setAssignedFrom(partial.assignedFrom); // NEW
+    if (Object.prototype.hasOwnProperty.call(partial, "assignedTo")) setAssignedTo(partial.assignedTo); // NEW
   };
 
   const resetAllFilters = () => {
@@ -277,6 +303,8 @@ const SalesLeads = () => {
     setOrderBy("");
     setOrderDir("ASC");
     setSearch("");
+    setAssignedFrom(""); // NEW
+    setAssignedTo(""); // NEW
   };
 
   return (
@@ -296,7 +324,18 @@ const SalesLeads = () => {
           sources={sources}
           sortFields={sortFields}
           orderDirOptions={orderDirOptions}
-          values={{ search, statusId, sourceId, orderBy, orderDir }}
+          values={{
+            search,
+            statusId,
+            sourceId,
+            orderBy,
+            orderDir,
+            limit, // NEW
+            assignedFrom, // NEW
+            assignedTo, // NEW
+          }}
+          limitOptions={limitOptions} // NEW
+          onLimitChange={handleLimitChange} // NEW
           onChange={handleToolbarChange}
           onResetAll={resetAllFilters}
         />

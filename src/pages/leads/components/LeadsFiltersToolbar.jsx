@@ -1,8 +1,97 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import Select from "@/components/form/Select";
-import TextInput from "@/components/form/TextInput";
+import TextInput from "@/components/form/TextInput"; // keep for Search
 import IconComponent from "@/components/ui/Icon";
+import Calendar from "react-calendar";
+import "react-calendar/dist/Calendar.css";
 
+// ----- date helpers -----
+const toISODate = (d) => {
+  if (!d) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+const today = new Date();
+const MIN_DATE = new Date("2020-01-01");
+const MAX_DATE = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+// ----- styled date picker popover -----
+const DatePopover = ({ label, value, onChangeISO, minDate, maxDate, clampMinTo, clampMaxTo }) => {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  const popRef = useRef(null);
+
+  // close when clicking outside
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (btnRef.current?.contains(e.target) || popRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // effective bounds
+  const effMin = clampMinTo ? new Date(clampMinTo) : minDate;
+  const effMax = clampMaxTo ? new Date(clampMaxTo) : maxDate;
+
+  const selectedDate = value ? new Date(value) : null;
+
+  const handlePick = (d) => {
+    const iso = toISODate(d);
+    onChangeISO(iso);
+    setOpen(false);
+  };
+
+  return (
+    <div className="w-full relative">
+      {label && <label className="block mb-1 text-sm font-medium text-gray-800">{label}</label>}
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full bg-white border rounded px-3 py-2 text-left text-sm text-gray-800 
+                   placeholder-gray-600 focus:outline-none focus:border-accent transition 
+                   border-gray-300 flex items-center justify-between"
+      >
+        <span className={value ? "" : "text-gray-400"}>{value || "Select date"}</span>
+        <IconComponent icon="mdi:calendar" width={18} className="text-gray-600" />
+      </button>
+      {open && (
+        <div ref={popRef} className="absolute z-30 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg">
+          <Calendar
+            onChange={handlePick}
+            value={selectedDate || undefined}
+            minDate={effMin || MIN_DATE}
+            maxDate={effMax || MAX_DATE}
+            next2Label={null}
+            prev2Label={null}
+          />
+          <div className="mt-2 flex justify-between gap-2">
+            <button
+              type="button"
+              className="text-xs text-gray-600 underline"
+              onClick={() => {
+                onChangeISO("");
+                setOpen(false);
+              }}
+            >
+              Clear
+            </button>
+            <button type="button" className="text-xs text-gray-600" onClick={() => setOpen(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ----- main toolbar -----
 const LeadsFiltersToolbar = ({
   statuses = [],
   sources = [],
@@ -18,13 +107,15 @@ const LeadsFiltersToolbar = ({
     orderBy: "",
     orderDir: "ASC",
     limit: 25,
+    assignedFrom: "",
+    assignedTo: "",
   },
   limitOptions = [],
-  onLimitChange, // NEW
+  onLimitChange,
   onChange,
   onResetAll,
 }) => {
-  const { search, statusId, sourceId, assigneeId, orderBy, orderDir, limit } = values;
+  const { search, statusId, sourceId, assigneeId, orderBy, orderDir, limit, assignedFrom, assignedTo } = values;
 
   const getLabel = (arr, val) => arr.find((x) => String(x.value) === String(val))?.label;
 
@@ -36,6 +127,11 @@ const LeadsFiltersToolbar = ({
       items.push({ key: "assignee", label: `Assignee: ${getLabel(assigneeOptions, assigneeId) || assigneeId}` });
     if (orderBy) items.push({ key: "orderBy", label: `Sort: ${getLabel(sortFields, orderBy) || orderBy}` });
     if (orderDir !== "ASC") items.push({ key: "orderDir", label: `Dir: ${orderDir}` });
+    if (assignedFrom || assignedTo) {
+      const from = assignedFrom || "…";
+      const to = assignedTo || "…";
+      items.push({ key: "assignedRange", label: `Assigned: ${from} → ${to}` });
+    }
     if (search) items.push({ key: "search", label: `Search: “${search}”` });
     return items;
   }, [
@@ -50,6 +146,8 @@ const LeadsFiltersToolbar = ({
     assigneeOptions,
     sortFields,
     showAssignee,
+    assignedFrom,
+    assignedTo,
   ]);
 
   const hasActiveFilters = chips.length > 0;
@@ -60,11 +158,9 @@ const LeadsFiltersToolbar = ({
     if (key === "assignee") onChange({ assigneeId: "" });
     if (key === "orderBy") onChange({ orderBy: "" });
     if (key === "orderDir") onChange({ orderDir: "ASC" });
+    if (key === "assignedRange") onChange({ assignedFrom: "", assignedTo: "" });
     if (key === "search") onChange({ search: "" });
   };
-
-  // Decide grid columns: +1 column if Assignee shown, +1 for Rows selector
-  const colsLg = showAssignee ? "lg:grid-cols-6" : "lg:grid-cols-5";
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -112,8 +208,8 @@ const LeadsFiltersToolbar = ({
         </div>
       </div>
 
-      {/* Second row: Filters + Rows per page (right) */}
-      <div className={`mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 ${colsLg}`}>
+      {/* Filters grid — responsive */}
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <Select
           label="Status"
           value={statusId}
@@ -156,8 +252,33 @@ const LeadsFiltersToolbar = ({
           placeholder="Ascending"
         />
 
-        {/* NEW: Rows per page */}
-        <Select label="Rows per page" value={limit} onChange={onLimitChange} options={limitOptions} placeholder="25" />
+        {limitOptions.length > 0 && (
+          <Select
+            label="Rows per page"
+            value={limit}
+            onChange={onLimitChange}
+            options={limitOptions}
+            placeholder="25"
+          />
+        )}
+
+        {/* Styled date inputs */}
+        <DatePopover
+          label="Assigned from"
+          value={assignedFrom}
+          onChangeISO={(v) => onChange({ assignedFrom: v })}
+          minDate={MIN_DATE}
+          maxDate={MAX_DATE}
+          clampMaxTo={assignedTo}
+        />
+        <DatePopover
+          label="Assigned to"
+          value={assignedTo}
+          onChangeISO={(v) => onChange({ assignedTo: v })}
+          minDate={MIN_DATE}
+          maxDate={MAX_DATE}
+          clampMinTo={assignedFrom}
+        />
       </div>
 
       {/* Active Chips */}

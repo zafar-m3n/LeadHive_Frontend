@@ -49,7 +49,7 @@ const ManagerLeads = () => {
 
   // Pagination
   const [page, setPage] = useState(1);
-  const [limit] = useState(10);
+  const [limit, setLimit] = useState(25); // match AdminLeads pattern
   const [totalPages, setTotalPages] = useState(1);
 
   // Filters / Sorting / Search
@@ -59,6 +59,8 @@ const ManagerLeads = () => {
   const [orderBy, setOrderBy] = useState("");
   const [orderDir, setOrderDir] = useState("ASC");
   const [search, setSearch] = useState("");
+  const [assignedFrom, setAssignedFrom] = useState(""); // NEW
+  const [assignedTo, setAssignedTo] = useState(""); // NEW
   const debouncedSearch = useDebouncedValue(search, 300);
 
   // Modals (single lead)
@@ -96,10 +98,12 @@ const ManagerLeads = () => {
           limit,
           status_id: statusId || undefined,
           source_id: sourceId || undefined,
-          assignee_id: assigneeId || undefined, // manager can filter by any assignee (per your backend)
+          assignee_id: assigneeId || undefined, // manager can filter by any assignee
           orderBy: orderBy || undefined,
           orderDir: orderDir || undefined,
           search: debouncedSearch || undefined,
+          assigned_from: assignedFrom || undefined, // NEW
+          assigned_to: assignedTo || undefined, // NEW
         };
 
         const res = await API.private.getLeads(params);
@@ -116,7 +120,7 @@ const ManagerLeads = () => {
         if (fetchId === fetchGuard.current) setLoading(false);
       }
     },
-    [limit, statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch]
+    [limit, statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo]
   );
 
   const fetchStatuses = useCallback(async () => {
@@ -195,10 +199,10 @@ const ManagerLeads = () => {
     fetchLeads({ page });
   }, [page, fetchLeads]);
 
-  // Reset page when filters/sort/search change
+  // Reset page when filters/sort/search/date range/limit change
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
-  }, [statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch]);
+  }, [statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo, limit]);
 
   // === Handlers (single) ===
   const handleSubmit = async (data) => {
@@ -338,6 +342,7 @@ const ManagerLeads = () => {
       { value: "value_decimal", label: "Value" },
       { value: "created_at", label: "Created at" },
       { value: "updated_at", label: "Updated at" },
+      { value: "assigned_at", label: "Assigned at (latest)" }, // NEW
     ],
     []
   );
@@ -347,6 +352,25 @@ const ManagerLeads = () => {
     { value: "DESC", label: "Descending" },
   ];
 
+  // Same limitOptions pattern as AdminLeads
+  const limitOptions = useMemo(
+    () => [
+      { value: 10, label: "10" },
+      { value: 25, label: "25" },
+      { value: 50, label: "50" },
+      { value: 100, label: "100" },
+      { value: 200, label: "200" },
+    ],
+    []
+  );
+
+  // Rows-per-page change (same as AdminLeads)
+  const handleLimitChange = (newValue) => {
+    const next = Number(newValue) || 25;
+    setLimit(next);
+    setPage(1);
+  };
+
   const handleToolbarChange = (partial) => {
     if (Object.prototype.hasOwnProperty.call(partial, "search")) setSearch(partial.search);
     if (Object.prototype.hasOwnProperty.call(partial, "statusId")) setStatusId(partial.statusId);
@@ -354,6 +378,8 @@ const ManagerLeads = () => {
     if (Object.prototype.hasOwnProperty.call(partial, "assigneeId")) setAssigneeId(partial.assigneeId);
     if (Object.prototype.hasOwnProperty.call(partial, "orderBy")) setOrderBy(partial.orderBy);
     if (Object.prototype.hasOwnProperty.call(partial, "orderDir")) setOrderDir(partial.orderDir);
+    if (Object.prototype.hasOwnProperty.call(partial, "assignedFrom")) setAssignedFrom(partial.assignedFrom); // NEW
+    if (Object.prototype.hasOwnProperty.call(partial, "assignedTo")) setAssignedTo(partial.assignedTo); // NEW
   };
 
   const resetAllFilters = () => {
@@ -363,6 +389,8 @@ const ManagerLeads = () => {
     setOrderBy("");
     setOrderDir("ASC");
     setSearch("");
+    setAssignedFrom(""); // NEW
+    setAssignedTo(""); // NEW
   };
 
   const idsOnCurrentPage = useMemo(() => leads.map((l) => l.id), [leads]);
@@ -403,7 +431,7 @@ const ManagerLeads = () => {
           </div>
         </div>
 
-        {/* Filters & Search Toolbar */}
+        {/* Filters & Search Toolbar (includes Assigned date range & Rows selector) */}
         <LeadsFiltersToolbar
           statuses={statuses}
           sources={sources}
@@ -411,7 +439,19 @@ const ManagerLeads = () => {
           orderDirOptions={orderDirOptions}
           assigneeOptions={assigneeOptions}
           showAssignee={true}
-          values={{ search, statusId, sourceId, assigneeId, orderBy, orderDir }}
+          values={{
+            search,
+            statusId,
+            sourceId,
+            assigneeId,
+            orderBy,
+            orderDir,
+            limit, // NEW
+            assignedFrom, // NEW
+            assignedTo, // NEW
+          }}
+          limitOptions={limitOptions} // NEW
+          onLimitChange={handleLimitChange} // NEW
           onChange={handleToolbarChange}
           onResetAll={resetAllFilters}
         />

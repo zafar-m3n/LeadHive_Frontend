@@ -68,6 +68,8 @@ const AdminLeads = () => {
   const [orderBy, setOrderBy] = useState(""); // backend defaults to id ASC if unset
   const [orderDir, setOrderDir] = useState("ASC");
   const [search, setSearch] = useState("");
+  const [assignedFrom, setAssignedFrom] = useState(""); // NEW
+  const [assignedTo, setAssignedTo] = useState(""); // NEW
   const debouncedSearch = useDebouncedValue(search, 300);
 
   // Modals (single row)
@@ -109,6 +111,9 @@ const AdminLeads = () => {
           orderBy: orderBy || undefined,
           orderDir: orderDir || undefined,
           search: debouncedSearch || undefined,
+          // NEW: assigned date range
+          assigned_from: assignedFrom || undefined,
+          assigned_to: assignedTo || undefined,
         };
 
         const res = await API.private.getLeads(params);
@@ -126,7 +131,18 @@ const AdminLeads = () => {
         if (fetchId === fetchGuard.current) setLoading(false);
       }
     },
-    [limit, statusId, sourceId, assigneeId, isAdminOrManager, orderBy, orderDir, debouncedSearch]
+    [
+      limit,
+      statusId,
+      sourceId,
+      assigneeId,
+      isAdminOrManager,
+      orderBy,
+      orderDir,
+      debouncedSearch,
+      assignedFrom,
+      assignedTo,
+    ]
   );
 
   const fetchStatuses = useCallback(async () => {
@@ -207,10 +223,10 @@ const AdminLeads = () => {
     fetchLeads({ page });
   }, [page, fetchLeads]);
 
-  // Reset page when filters/sort/search/limit change
+  // Reset page when filters/sort/search/limit/date range change
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
-  }, [statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch, limit]);
+  }, [statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch, limit, assignedFrom, assignedTo]);
 
   // === Handlers (single lead) ===
   const handleSubmit = async (data) => {
@@ -352,6 +368,7 @@ const AdminLeads = () => {
       { value: "value_decimal", label: "Value" },
       { value: "created_at", label: "Created at" },
       { value: "updated_at", label: "Updated at" },
+      { value: "assigned_at", label: "Assigned at (latest)" }, // NEW
     ],
     []
   );
@@ -379,6 +396,8 @@ const AdminLeads = () => {
     if (Object.prototype.hasOwnProperty.call(partial, "assigneeId")) setAssigneeId(partial.assigneeId);
     if (Object.prototype.hasOwnProperty.call(partial, "orderBy")) setOrderBy(partial.orderBy);
     if (Object.prototype.hasOwnProperty.call(partial, "orderDir")) setOrderDir(partial.orderDir);
+    if (Object.prototype.hasOwnProperty.call(partial, "assignedFrom")) setAssignedFrom(partial.assignedFrom); // NEW
+    if (Object.prototype.hasOwnProperty.call(partial, "assignedTo")) setAssignedTo(partial.assignedTo); // NEW
   };
 
   const resetAllFilters = () => {
@@ -388,13 +407,15 @@ const AdminLeads = () => {
     setOrderBy("");
     setOrderDir("ASC");
     setSearch("");
+    setAssignedFrom(""); // NEW
+    setAssignedTo(""); // NEW
   };
 
-  // Rows-per-page change (prev-state form)
+  // Rows-per-page change
   const handleLimitChange = (newValue) => {
     const next = Number(newValue) || 25;
     setLimit((prev) => next);
-    setPage((prev) => 1);
+    setPage(() => 1);
   };
 
   const idsOnCurrentPage = useMemo(() => leads.map((l) => l.id), [leads]);
@@ -450,7 +471,17 @@ const AdminLeads = () => {
           orderDirOptions={orderDirOptions}
           assigneeOptions={isAdminOrManager ? assigneeOptions : []}
           showAssignee={isAdminOrManager}
-          values={{ search, statusId, sourceId, assigneeId, orderBy, orderDir, limit }}
+          values={{
+            search,
+            statusId,
+            sourceId,
+            assigneeId,
+            orderBy,
+            orderDir,
+            limit,
+            assignedFrom, // NEW
+            assignedTo, // NEW
+          }}
           limitOptions={limitOptions}
           onLimitChange={handleLimitChange}
           onChange={handleToolbarChange}
