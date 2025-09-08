@@ -189,8 +189,8 @@ const LeadsTable = ({
     );
   }, [assigneeQuery, dropdownTargets]);
 
-  // Fixed widths (px) for Lead, Company, Phone, Assignee
-  const W_SELECT = "w-[42px]";
+  // Fixed widths (px)
+  const W_SELECT = "w-[46px]";
   const W_LEAD = "w-[175px]";
   const W_COMPANY = "w-[175px]";
   const W_PHONE = "w-[100px]";
@@ -211,12 +211,34 @@ const LeadsTable = ({
                 <label className="inline-flex items-center gap-2 cursor-pointer select-none">
                   <input
                     type="checkbox"
-                    className="rounded border-gray-300"
+                    className="peer sr-only"
                     checked={allOnPageChecked}
                     ref={(el) => el && (el.indeterminate = someOnPageChecked)}
                     onChange={(e) => onToggleSelectAll(e.target.checked)}
                     aria-label="Select all rows on page"
                   />
+                  <span
+                    data-indeterminate={someOnPageChecked ? "true" : undefined}
+                    className="relative inline-flex h-4 w-4 items-center justify-center rounded border border-gray-300 bg-white shadow-sm
+               transition-colors duration-200 ease-in-out
+               peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300
+               peer-checked:bg-indigo-500 peer-checked:border-indigo-500
+               after:absolute after:h-0.5 after:w-2 after:rounded-sm after:bg-white after:opacity-0
+               after:left-1/2 after:top-1/2 after:-translate-x-1/2 after:-translate-y-1/2
+               data-[indeterminate=true]:after:opacity-100"
+                  >
+                    <svg
+                      className="h-3 w-3 text-white opacity-0 pointer-events-none transition-opacity duration-200 ease-in-out peer-checked:opacity-100"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </span>
                 </label>
               </th>
             )}
@@ -249,7 +271,6 @@ const LeadsTable = ({
               const phone = row.phone && row.phone.length > 4 ? row.phone : "N/A";
               const assigneeName = getCurrentAssigneeName(row);
 
-              // Accept either row.country_code or row.country (name), and show a 2-letter code
               const countryRaw = row.country_code ?? row.country;
               const countryCode = toCountryCode(countryRaw);
 
@@ -261,13 +282,33 @@ const LeadsTable = ({
                   {/* Row checkbox */}
                   {showSelection && (
                     <td className={`px-2 py-2 align-top ${W_SELECT}`}>
-                      <input
-                        type="checkbox"
-                        className="rounded border-gray-300"
-                        checked={isChecked}
-                        onChange={() => onToggleSelect(row.id)}
-                        aria-label={`Select lead ${row.id}`}
-                      />
+                      <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="peer sr-only"
+                          checked={isChecked}
+                          onChange={() => onToggleSelect(row.id)}
+                          aria-label={`Select lead ${row.id}`}
+                        />
+                        <span
+                          className="relative inline-flex h-4 w-4 items-center justify-center rounded border border-gray-300 bg-white shadow-sm
+               transition-colors duration-200 ease-in-out
+               peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300
+               peer-checked:bg-indigo-500 peer-checked:border-indigo-500"
+                        >
+                          <svg
+                            className="h-3 w-3 text-white opacity-0 pointer-events-none transition-opacity duration-200 ease-in-out peer-checked:opacity-100"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </span>
+                      </label>
                     </td>
                   )}
 
