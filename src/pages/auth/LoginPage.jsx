@@ -1,3 +1,4 @@
+// src/pages/auth/LoginPage.jsx
 import React, { useState } from "react";
 import AuthLayout from "@/layouts/AuthLayout";
 import { useForm } from "react-hook-form";
@@ -48,6 +49,9 @@ const LoginPage = () => {
         // ✅ Save token and user data
         token.setAuthToken(res.data.data.token);
         token.setUserData(res.data.data.user);
+
+        // ✅ Schedule auto logout when token expires
+        token.scheduleAutoLogout();
 
         const userData = res.data.data.user;
 

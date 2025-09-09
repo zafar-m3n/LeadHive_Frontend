@@ -1,5 +1,5 @@
-import React from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import React, { useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 
 // Auth
@@ -14,7 +14,7 @@ import ManagerDashboard from "@/pages/dashboard/ManagerDashboard";
 // Users
 import ManageUsers from "@/pages/users/ManageUsers";
 
-//Teams
+// Teams
 import ManageTeams from "@/pages/teams/ManageTeams";
 import ViewTeamPage from "@/pages/teams/ViewTeamPage";
 import ManagerTeam from "@/pages/teams/ManagerTeam";
@@ -43,47 +43,58 @@ import NotFound from "@/pages/NotFound";
 import PrivateRoute from "@/components/PrivateRoute";
 import PublicRoute from "@/components/PublicRoute";
 import token from "@/lib/utilities";
+import Notification from "@/components/ui/Notification";
 
-function App() {
-  const protectedRoutes = [
-    // Dashboards
-    { path: "/dashboard", element: SalesDashboard, roles: ["sales_rep"] },
-    { path: "/admin/dashboard", element: AdminDashboard, roles: ["admin"] },
-    { path: "/manager/dashboard", element: ManagerDashboard, roles: ["manager"] },
+const protectedRoutes = [
+  // Dashboards
+  { path: "/dashboard", element: SalesDashboard, roles: ["sales_rep"] },
+  { path: "/admin/dashboard", element: AdminDashboard, roles: ["admin"] },
+  { path: "/manager/dashboard", element: ManagerDashboard, roles: ["manager"] },
 
-    // Users
-    { path: "/admin/users", element: ManageUsers, roles: ["admin"] },
+  // Users
+  { path: "/admin/users", element: ManageUsers, roles: ["admin"] },
 
-    //Teams
-    { path: "/admin/teams", element: ManageTeams, roles: ["admin"] },
-    { path: "/admin/teams/:id", element: ViewTeamPage, roles: ["admin"] },
-    { path: "/manager/team", element: ManagerTeam, roles: ["manager"] },
+  // Teams
+  { path: "/admin/teams", element: ManageTeams, roles: ["admin"] },
+  { path: "/admin/teams/:id", element: ViewTeamPage, roles: ["admin"] },
+  { path: "/manager/team", element: ManagerTeam, roles: ["manager"] },
 
-    // Leads
-    { path: "/admin/leads", element: AdminLeads, roles: ["admin"] },
-    { path: "/admin/leads/import", element: LeadsImport, roles: ["admin"] },
-    { path: "/manager/leads", element: ManagerLeads, roles: ["manager"] },
-    { path: "/leads", element: SalesLeads, roles: ["sales_rep"] },
+  // Leads
+  { path: "/admin/leads", element: AdminLeads, roles: ["admin"] },
+  { path: "/admin/leads/import", element: LeadsImport, roles: ["admin"] },
+  { path: "/manager/leads", element: ManagerLeads, roles: ["manager"] },
+  { path: "/leads", element: SalesLeads, roles: ["sales_rep"] },
 
-    // Reports
-    { path: "/admin/reports", element: AdminReports, roles: ["admin"] },
-    { path: "/manager/reports", element: ManagerReports, roles: ["manager"] },
+  // Reports
+  { path: "/admin/reports", element: AdminReports, roles: ["admin"] },
+  { path: "/manager/reports", element: ManagerReports, roles: ["manager"] },
 
-    // Profile
-    { path: "/manager/profile", element: ManagerProfile, roles: ["manager"] },
-    { path: "/profile", element: SalesProfile, roles: ["sales_rep"] },
+  // Profile
+  { path: "/manager/profile", element: ManagerProfile, roles: ["manager"] },
+  { path: "/profile", element: SalesProfile, roles: ["sales_rep"] },
 
-    // Settings
-    { path: "/admin/settings", element: AdminSettings, roles: ["admin"] },
-  ];
+  // Settings
+  { path: "/admin/settings", element: AdminSettings, roles: ["admin"] },
+];
 
-  const publicRoutes = [
-    { path: "/register", element: RegisterPage },
-    { path: "/login", element: LoginPage },
-  ];
+const publicRoutes = [
+  { path: "/register", element: RegisterPage },
+  { path: "/login", element: LoginPage },
+];
+
+function AppShell() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Initialize session (schedule auto-logout, handle immediate expiry)
+    token.initAuthSession(() => {
+      Notification.error("Your session expired. Please log in again.");
+      navigate("/login", { replace: true });
+    });
+  }, [navigate]);
 
   const getDashboardRedirect = () => {
-    if (!token.isAuthenticated()) return "/login";
+    if (!token.isAuthenticated() || token.isExpired()) return "/login";
 
     const user = token.getUserData();
     const role = user?.role?.value;
@@ -95,41 +106,39 @@ function App() {
 
   return (
     <>
-      <Router>
-        <Routes>
-          {/* Root redirect by role */}
-          <Route path="/" element={<Navigate to={getDashboardRedirect()} replace />} />
+      <Routes>
+        {/* Root redirect by role */}
+        <Route path="/" element={<Navigate to={getDashboardRedirect()} replace />} />
 
-          {/* Protected routes */}
-          {protectedRoutes.map((route, idx) => (
-            <Route
-              key={idx}
-              path={route.path}
-              element={
-                <PrivateRoute allowedRoles={route.roles}>
-                  <route.element />
-                </PrivateRoute>
-              }
-            />
-          ))}
+        {/* Protected routes */}
+        {protectedRoutes.map((route, idx) => (
+          <Route
+            key={idx}
+            path={route.path}
+            element={
+              <PrivateRoute allowedRoles={route.roles}>
+                <route.element />
+              </PrivateRoute>
+            }
+          />
+        ))}
 
-          {/* Public routes */}
-          {publicRoutes.map((route, idx) => (
-            <Route
-              key={idx}
-              path={route.path}
-              element={
-                <PublicRoute>
-                  <route.element />
-                </PublicRoute>
-              }
-            />
-          ))}
+        {/* Public routes */}
+        {publicRoutes.map((route, idx) => (
+          <Route
+            key={idx}
+            path={route.path}
+            element={
+              <PublicRoute>
+                <route.element />
+              </PublicRoute>
+            }
+          />
+        ))}
 
-          {/* Not Found */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Router>
+        {/* Not Found */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
 
       {/* Toasts */}
       <ToastContainer
@@ -145,4 +154,10 @@ function App() {
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <Router>
+      <AppShell />
+    </Router>
+  );
+}

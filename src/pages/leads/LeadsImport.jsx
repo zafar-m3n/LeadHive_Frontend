@@ -27,6 +27,9 @@ const LeadsImport = () => {
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState(null); // { success, summary, notes, message, data } or { success:false, error, details }
 
+  // Redirect countdown
+  const [redirectIn, setRedirectIn] = useState(5);
+
   // Drag state
   const [isDragging, setIsDragging] = useState(false);
 
@@ -36,7 +39,7 @@ const LeadsImport = () => {
       setSchemaLoading(true);
       try {
         const res = await API.private.getLeadTemplateSchema();
-        setSchema(res.data); // { fields, defaults, ... }
+        setSchema(res.data); // { fields, defaults, notes, ... }
       } catch {
         Notification.error("Failed to load template schema");
       } finally {
@@ -45,6 +48,25 @@ const LeadsImport = () => {
     };
     fetchSchema();
   }, []);
+
+  // Start 5s redirect after a successful import
+  useEffect(() => {
+    if (!result?.success) return;
+
+    setRedirectIn(5);
+    const interval = setInterval(() => {
+      setRedirectIn((s) => (s > 1 ? s - 1 : 0));
+    }, 1000);
+
+    const timeout = setTimeout(() => {
+      navigate("/admin/leads");
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [result?.success, navigate]);
 
   // Drag & Drop handlers
   const onDragOver = (e) => {
@@ -123,8 +145,7 @@ const LeadsImport = () => {
       const res = await API.private.importLeads({ leads: rows });
       if (res.data?.success) {
         Notification.success(res.data.message || "Leads imported successfully");
-        setResult(res.data);
-        navigate("/admin/leads");
+        setResult(res.data); // show summary card (and auto-redirect effect kicks in)
       } else {
         Notification.error(res.data?.error || "Import failed");
         setResult(res.data);
@@ -187,16 +208,100 @@ const LeadsImport = () => {
           </div>
         </div>
 
+        {/* ===== Summary Card (ABOVE Schema) ===== */}
+        {result && (
+          <div
+            className={`rounded-2xl p-4 ${
+              result.success
+                ? "bg-green-50 border border-green-200 text-green-800"
+                : "bg-red-50 border border-red-200 text-red-800"
+            }`}
+          >
+            {result.success ? (
+              <>
+                <p className="font-medium">{result.message || "Import completed."}</p>
+                {result.summary && (
+                  <p className="mt-1 text-sm">
+                    Attempted: <strong>{result.summary.attempted}</strong> · Inserted:{" "}
+                    <strong>{result.summary.inserted}</strong> · Duplicates/Skipped:{" "}
+                    <strong>{result.summary.duplicates_or_skipped}</strong>
+                  </p>
+                )}
+
+                {!!(result.notes && result.notes.length) && (
+                  <div className="mt-3">
+                    <p className="font-medium">Notes</p>
+                    <ul className="mt-1 list-disc list-inside text-sm">
+                      {result.notes.map((n, idx) => (
+                        <li key={idx}>
+                          Row {n.index + 1}:{" "}
+                          {n.email ? (
+                            <>
+                              <span className="font-mono">{n.email}</span> <span className="opacity-70">– </span>
+                            </>
+                          ) : n.phone ? (
+                            <>
+                              <span className="font-mono">{n.phone}</span> <span className="opacity-70">– </span>
+                            </>
+                          ) : null}
+                          {n.note}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Redirect hint */}
+                <p className="mt-3 text-sm">
+                  Redirecting to <span className="font-semibold">Leads</span> in{" "}
+                  <span className="font-semibold">{redirectIn}</span>s…
+                </p>
+
+                <div className="mt-3 w-fit">
+                  <AccentButton text="Go to Leads now" onClick={() => navigate("/admin/leads")} />
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="font-medium">Import failed</p>
+                <p className="text-sm mt-1">{result.error}</p>
+                {result.details?.notes && result.details.notes.length > 0 && (
+                  <div className="mt-3">
+                    <p className="font-medium">Details</p>
+                    <ul className="mt-1 list-disc list-inside text-sm">
+                      {result.details.notes.map((n, idx) => (
+                        <li key={idx}>
+                          Row {n.index + 1}:{" "}
+                          {n.email ? (
+                            <>
+                              <span className="font-mono">{n.email}</span> <span className="opacity-70">– </span>
+                            </>
+                          ) : n.phone ? (
+                            <>
+                              <span className="font-mono">{n.phone}</span> <span className="opacity-70">– </span>
+                            </>
+                          ) : null}
+                          {n.note}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {/* Schema Card */}
         <div className="rounded-2xl border border-gray-200 p-4 bg-white shadow-sm">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between">
             <h2 className="text-lg font-medium text-gray-900">Template Schema</h2>
             <div className="w-fit">
               <AccentButton text="Download Template CSV" onClick={handleDownloadTemplate} />
             </div>
           </div>
 
-          {schemaLoading ? (
+          {/* {schemaLoading ? (
             <Spinner message="Loading schema..." />
           ) : schema ? (
             <>
@@ -216,23 +321,38 @@ const LeadsImport = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-700 mb-1 font-medium">Defaults & Rules</p>
-                  <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
-                    <li>
-                      <strong>status</strong> →{" "}
-                      <code className="px-1 rounded bg-gray-100"> {schema?.defaults?.status ?? "new"} </code>
-                    </li>
-                    <li>
-                      <strong>source</strong> →{" "}
-                      <code className="px-1 rounded bg-gray-100"> {schema?.defaults?.source ?? "facebook"} </code>
-                    </li>
-                    <li>Duplicates are checked by email only (duplicates are skipped).</li>
-                  </ul>
+                  {Array.isArray(schema.notes) ? (
+                    <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                      <li>
+                        <strong>status</strong> →{" "}
+                        <code className="px-1 rounded bg-gray-100">{schema?.defaults?.status ?? "new"}</code>
+                      </li>
+                      <li>
+                        <strong>source</strong> →{" "}
+                        <code className="px-1 rounded bg-gray-100">{schema?.defaults?.source ?? "facebook"}</code>
+                      </li>
+                      {schema.notes.map((n, i) => (
+                        <li key={i}>{n}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                      <li>
+                        <strong>status</strong> →{" "}
+                        <code className="px-1 rounded bg-gray-100">{schema?.defaults?.status ?? "new"}</code>
+                      </li>
+                      <li>
+                        <strong>source</strong> →{" "}
+                        <code className="px-1 rounded bg-gray-100">{schema?.defaults?.source ?? "facebook"}</code>
+                      </li>
+                    </ul>
+                  )}
                 </div>
               </div>
             </>
           ) : (
             <p className="text-sm text-red-600">Failed to load schema</p>
-          )}
+          )} */}
         </div>
 
         {/* Upload Box (CSV only) */}
@@ -314,66 +434,6 @@ const LeadsImport = () => {
                 </button>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Results */}
-        {result && (
-          <div
-            className={`mt-6 rounded-2xl p-4 ${
-              result.success
-                ? "bg-green-50 border border-green-200 text-green-800"
-                : "bg-red-50 border border-red-200 text-red-800"
-            }`}
-          >
-            {result.success ? (
-              <>
-                <p className="font-medium">{result.message || "Import completed."}</p>
-                {result.summary && (
-                  <p className="mt-1 text-sm">
-                    Attempted: <strong>{result.summary.attempted}</strong> · Inserted:{" "}
-                    <strong>{result.summary.inserted}</strong> · Duplicates/Skipped:{" "}
-                    <strong>{result.summary.duplicates_or_skipped}</strong>
-                  </p>
-                )}
-                {!!(result.notes && result.notes.length) && (
-                  <div className="mt-3">
-                    <p className="font-medium">Notes</p>
-                    <ul className="mt-1 list-disc list-inside text-sm">
-                      {result.notes.map((n, idx) => (
-                        <li key={idx}>
-                          Row {n.index + 1}: {n.email ? `${n.email} – ` : ""}
-                          {n.note === "duplicate_email_in_db" && "Duplicate email in database (skipped)."}
-                          {n.note === "duplicate_email_in_file" && "Duplicate email within uploaded file (skipped)."}
-                          {!["duplicate_email_in_db", "duplicate_email_in_file"].includes(n.note) && n.note}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <div className="mt-3 w-fit">
-                  <AccentButton text="Back to Leads" onClick={() => navigate("/admin/leads")} />
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="font-medium">Import failed</p>
-                <p className="text-sm mt-1">{result.error}</p>
-                {result.details?.notes && result.details.notes.length > 0 && (
-                  <div className="mt-3">
-                    <p className="font-medium">Details</p>
-                    <ul className="mt-1 list-disc list-inside text-sm">
-                      {result.details.notes.map((n, idx) => (
-                        <li key={idx}>
-                          Row {n.index + 1}: {n.email ? `${n.email} – ` : ""}
-                          {n.note}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </>
-            )}
           </div>
         )}
       </div>

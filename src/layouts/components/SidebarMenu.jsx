@@ -8,8 +8,7 @@ const SidebarMenu = ({ menuItems }) => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    token.removeAuthToken();
-    token.removeUserData();
+    token.logout();
     navigate("/login");
   };
 

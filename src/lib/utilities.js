@@ -1,36 +1,140 @@
-const getAuthToken = () => {
-  return localStorage.getItem("leadhive.token");
-};
+// src/lib/utilities.js
+import { jwtDecode } from "jwt-decode";
+
+const TOKEN_KEY = "leadhive.token";
+const USER_KEY = "leadhive.user";
+const LOGOUT_BCAST_KEY = "leadhive.logout_at"; // storage event key for cross-tab sync
+const SKEW_MS = 2000; // fire slightly early to avoid edge races
+
+let logoutTimerId = null;
+let onExpireCallback = null;
+
+/* ---------------------------
+ * Basic storage helpers
+ * --------------------------*/
+const getAuthToken = () => localStorage.getItem(TOKEN_KEY);
 
 const setAuthToken = (authToken) => {
-  localStorage.setItem("leadhive.token", authToken);
+  localStorage.setItem(TOKEN_KEY, authToken);
 };
 
 const removeAuthToken = () => {
-  localStorage.removeItem("leadhive.token");
+  localStorage.removeItem(TOKEN_KEY);
 };
 
 const getUserData = () => {
-  const userData = localStorage.getItem("leadhive.user");
-  if (userData) {
-    return JSON.parse(userData);
-  }
-  return null;
+  const raw = localStorage.getItem(USER_KEY);
+  return raw ? JSON.parse(raw) : null;
 };
 
 const setUserData = (userData) => {
-  localStorage.setItem("leadhive.user", JSON.stringify(userData));
+  localStorage.setItem(USER_KEY, JSON.stringify(userData));
 };
 
 const removeUserData = () => {
-  localStorage.removeItem("leadhive.user");
+  localStorage.removeItem(USER_KEY);
 };
 
-const isAuthenticated = () => {
-  return !!getAuthToken();
+/* ---------------------------
+ * JWT exp helpers
+ * --------------------------*/
+const decodeExpMs = () => {
+  const t = getAuthToken();
+  if (!t) return null;
+  try {
+    const { exp } = jwtDecode(t); // exp is in SECONDS
+    if (!exp) return null;
+    return exp * 1000; // convert to ms
+  } catch {
+    return null;
+  }
 };
 
+const isAuthenticated = () => !!getAuthToken();
+
+const isExpired = () => {
+  const expMs = decodeExpMs();
+  if (!expMs) {
+    // If no exp or bad token: consider it invalid/expired when a token exists
+    return isAuthenticated() ? true : false;
+  }
+  return Date.now() >= expMs - SKEW_MS;
+};
+
+/* ---------------------------
+ * Logout + scheduling
+ * --------------------------*/
+const clearLogoutTimer = () => {
+  if (logoutTimerId) {
+    clearTimeout(logoutTimerId);
+    logoutTimerId = null;
+  }
+};
+
+const broadcastLogout = () => {
+  // Triggers the 'storage' event in other tabs to perform the same action
+  localStorage.setItem(LOGOUT_BCAST_KEY, String(Date.now()));
+};
+
+const logout = () => {
+  clearLogoutTimer();
+  removeAuthToken();
+  removeUserData();
+  broadcastLogout();
+  if (typeof onExpireCallback === "function") onExpireCallback();
+};
+
+const scheduleAutoLogout = () => {
+  clearLogoutTimer();
+  if (!isAuthenticated()) return;
+
+  const expMs = decodeExpMs();
+  if (!expMs) {
+    // Invalid token; fail closed
+    logout();
+    return;
+  }
+
+  const remaining = expMs - Date.now() - SKEW_MS;
+  if (remaining <= 0) {
+    logout();
+    return;
+  }
+
+  logoutTimerId = setTimeout(() => {
+    logout();
+  }, remaining);
+};
+
+/* ---------------------------
+ * Session initializer
+ * Call once in App (e.g. inside a useEffect)
+ * --------------------------*/
+const initAuthSession = (handleExpire) => {
+  onExpireCallback = handleExpire;
+
+  if (isExpired()) {
+    logout();
+  } else {
+    scheduleAutoLogout();
+  }
+
+  // Cross-tab sync: if any tab writes LOGOUT_BCAST_KEY, logout here too
+  window.addEventListener("storage", (e) => {
+    if (e.key === LOGOUT_BCAST_KEY) {
+      clearLogoutTimer();
+      removeAuthToken();
+      removeUserData();
+      if (typeof onExpireCallback === "function") onExpireCallback();
+    }
+  });
+};
+
+/* ---------------------------
+ * Public API
+ * --------------------------*/
 const token = {
+  // storage
   getAuthToken,
   setAuthToken,
   removeAuthToken,
@@ -39,7 +143,14 @@ const token = {
   setUserData,
   removeUserData,
 
+  // checks
   isAuthenticated,
+  isExpired,
+
+  // lifecycle
+  initAuthSession,
+  scheduleAutoLogout,
+  logout,
 };
 
 export default token;
