@@ -6,7 +6,7 @@ import API from "@/services/index";
 import Notification from "@/components/ui/Notification";
 import AccentButton from "@/components/ui/AccentButton";
 import GrayButton from "@/components/ui/GrayButton";
-import Spinner from "@/components/ui/Spinner";
+import Icon from "@/components/ui/Icon";
 import Heading from "@/components/ui/Heading";
 import Papa from "papaparse";
 
@@ -300,59 +300,12 @@ const LeadsImport = () => {
               <AccentButton text="Download Template CSV" onClick={handleDownloadTemplate} />
             </div>
           </div>
-
-          {/* {schemaLoading ? (
-            <Spinner message="Loading schema..." />
-          ) : schema ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-700 mb-1 font-medium">Fields</p>
-                  <div className="flex flex-wrap gap-2">
-                    {schema.fields?.map((f) => (
-                      <span
-                        key={f}
-                        className="inline-flex items-center text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-800"
-                      >
-                        {f}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-700 mb-1 font-medium">Defaults & Rules</p>
-                  {Array.isArray(schema.notes) ? (
-                    <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
-                      <li>
-                        <strong>status</strong> →{" "}
-                        <code className="px-1 rounded bg-gray-100">{schema?.defaults?.status ?? "new"}</code>
-                      </li>
-                      <li>
-                        <strong>source</strong> →{" "}
-                        <code className="px-1 rounded bg-gray-100">{schema?.defaults?.source ?? "facebook"}</code>
-                      </li>
-                      {schema.notes.map((n, i) => (
-                        <li key={i}>{n}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
-                      <li>
-                        <strong>status</strong> →{" "}
-                        <code className="px-1 rounded bg-gray-100">{schema?.defaults?.status ?? "new"}</code>
-                      </li>
-                      <li>
-                        <strong>source</strong> →{" "}
-                        <code className="px-1 rounded bg-gray-100">{schema?.defaults?.source ?? "facebook"}</code>
-                      </li>
-                    </ul>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-red-600">Failed to load schema</p>
-          )} */}
+          <div
+            className={`rounded-2xl p-4 bg-blue-50 border border-blue-200 text-blue-800 flex items-center mt-4 space-x-2`}
+          >
+            <Icon icon="mdi:info" />
+            CSV File should not have more than&nbsp;<strong>300 rows</strong>&nbsp;at once to avoid timeouts.
+          </div>
         </div>
 
         {/* Upload Box (CSV only) */}
