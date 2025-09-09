@@ -237,30 +237,12 @@ const LeadsFiltersToolbar = ({
         )}
 
         <Select
-          label="Sort by"
-          value={orderBy}
-          onChange={(v) => onChange({ orderBy: v })}
-          options={sortFields}
-          placeholder="Default (ID)"
-        />
-
-        <Select
           label="Direction"
           value={orderDir}
           onChange={(v) => onChange({ orderDir: v })}
           options={orderDirOptions}
           placeholder="Ascending"
         />
-
-        {limitOptions.length > 0 && (
-          <Select
-            label="Rows per page"
-            value={limit}
-            onChange={onLimitChange}
-            options={limitOptions}
-            placeholder="25"
-          />
-        )}
 
         {/* Styled date inputs */}
         <DatePopover
@@ -279,6 +261,24 @@ const LeadsFiltersToolbar = ({
           maxDate={MAX_DATE}
           clampMinTo={assignedFrom}
         />
+
+        <Select
+          label="Sort by"
+          value={orderBy}
+          onChange={(v) => onChange({ orderBy: v })}
+          options={sortFields}
+          placeholder="Default (ID)"
+        />
+
+        {limitOptions.length > 0 && (
+          <Select
+            label="Rows per page"
+            value={limit}
+            onChange={onLimitChange}
+            options={limitOptions}
+            placeholder="25"
+          />
+        )}
       </div>
 
       {/* Active Chips */}
