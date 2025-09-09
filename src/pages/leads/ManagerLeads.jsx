@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
 import Notification from "@/components/ui/Notification";
@@ -26,6 +27,7 @@ const useDebouncedValue = (value, delay = 300) => {
 };
 
 const ManagerLeads = () => {
+  const navigate = useNavigate();
   // Data
   const [leads, setLeads] = useState([]);
   const [statuses, setStatuses] = useState([]);
@@ -226,8 +228,7 @@ const ManagerLeads = () => {
   };
 
   const handleEdit = (lead) => {
-    setEditingLead(lead);
-    setIsModalOpen(true);
+    navigate(`/manager/leads/${lead.id}`);
   };
 
   const confirmDelete = (lead) => {

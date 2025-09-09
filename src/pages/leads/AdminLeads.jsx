@@ -37,13 +37,13 @@ const AdminLeads = () => {
 
   // Data
   const [leads, setLeads] = useState([]);
-  const [statuses, setStatuses] = useState([]); // [{value,label}]
-  const [sources, setSources] = useState([]); // [{value,label}]
-  const [managers, setManagers] = useState([]); // used for per-row Assign dropdown (unchanged)
-  const [assigneeOptions, setAssigneeOptions] = useState([]); // for filter dropdown
+  const [statuses, setStatuses] = useState([]);
+  const [sources, setSources] = useState([]);
+  const [managers, setManagers] = useState([]);
+  const [assigneeOptions, setAssigneeOptions] = useState([]);
 
   // Bulk targets (uses /bulk/targets)
-  const [bulkTargets, setBulkTargets] = useState([]); // [{id, full_name, email}]
+  const [bulkTargets, setBulkTargets] = useState([]);
   const bulkTargetOptions = useMemo(
     () =>
       (bulkTargets || []).map((u) => ({
@@ -58,23 +58,22 @@ const AdminLeads = () => {
 
   // Pagination
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(25); // DEFAULT 25
+  const [limit, setLimit] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
 
   // Filters / Sorting / Search
   const [statusId, setStatusId] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
-  const [orderBy, setOrderBy] = useState(""); // backend defaults to id ASC if unset
+  const [orderBy, setOrderBy] = useState("");
   const [orderDir, setOrderDir] = useState("ASC");
   const [search, setSearch] = useState("");
-  const [assignedFrom, setAssignedFrom] = useState(""); // NEW
-  const [assignedTo, setAssignedTo] = useState(""); // NEW
+  const [assignedFrom, setAssignedFrom] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  // Modals (single row)
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingLead, setEditingLead] = useState(null);
+  // Modals
+  const [isModalOpen, setIsModalOpen] = useState(false); // for Add Lead
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -111,7 +110,6 @@ const AdminLeads = () => {
           orderBy: orderBy || undefined,
           orderDir: orderDir || undefined,
           search: debouncedSearch || undefined,
-          // NEW: assigned date range
           assigned_from: assignedFrom || undefined,
           assigned_to: assignedTo || undefined,
         };
@@ -122,7 +120,6 @@ const AdminLeads = () => {
         if (res.data?.code === "OK") {
           setLeads(res.data.data.leads || []);
           setTotalPages(res.data.data.pagination.totalPages);
-          // Clear selections whenever page changes/fetch completes
           setSelectedIds([]);
         }
       } catch (err) {
@@ -167,7 +164,6 @@ const AdminLeads = () => {
     }
   }, []);
 
-  // Keep this for the per-row Assign dropdown (unchanged)
   const fetchManagersAndAdmins = useCallback(async () => {
     try {
       const res = await API.private.getManagersAndAdmins();
@@ -179,7 +175,6 @@ const AdminLeads = () => {
     }
   }, []);
 
-  // Assignees for the filter dropdown (admins & managers)
   const fetchAssignees = useCallback(async () => {
     if (!isAdminOrManager) return;
     try {
@@ -196,7 +191,6 @@ const AdminLeads = () => {
     }
   }, [isAdminOrManager]);
 
-  // Bulk assign targets
   const fetchBulkTargets = useCallback(async () => {
     if (!isAdminOrManager) return;
     try {
@@ -205,11 +199,10 @@ const AdminLeads = () => {
         setBulkTargets(res.data.data?.targets || []);
       }
     } catch {
-      // silent error; modal will show empty dropdown if needed
+      // silent
     }
   }, [isAdminOrManager]);
 
-  // Initial loads
   useEffect(() => {
     fetchStatuses();
     fetchSources();
@@ -218,30 +211,22 @@ const AdminLeads = () => {
     fetchBulkTargets();
   }, [fetchStatuses, fetchSources, fetchManagersAndAdmins, fetchAssignees, fetchBulkTargets]);
 
-  // Fetch when page changes
   useEffect(() => {
     fetchLeads({ page });
   }, [page, fetchLeads]);
 
-  // Reset page when filters/sort/search/limit/date range change
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
   }, [statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch, limit, assignedFrom, assignedTo]);
 
-  // === Handlers (single lead) ===
+  // === Handlers ===
   const handleSubmit = async (data) => {
     setLoading(true);
     try {
-      if (editingLead) {
-        await API.private.updateLead(editingLead.id, data);
-        Notification.success("Lead updated successfully");
-      } else {
-        await API.private.createLead(data);
-        Notification.success("Lead created successfully");
-      }
+      await API.private.createLead(data);
+      Notification.success("Lead created successfully");
       await fetchLeads({ page });
       setIsModalOpen(false);
-      setEditingLead(null);
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to save lead");
     } finally {
@@ -250,8 +235,7 @@ const AdminLeads = () => {
   };
 
   const handleEdit = (lead) => {
-    setEditingLead(lead);
-    setIsModalOpen(true);
+    navigate(`/admin/leads/${lead.id}`);
   };
 
   const confirmDelete = (lead) => {
@@ -282,7 +266,9 @@ const AdminLeads = () => {
   const handleAssign = async () => {
     if (!leadToAssign || !selectedAssignee) return;
     try {
-      await API.private.assignLead(leadToAssign.id, { assignee_id: selectedAssignee.id });
+      await API.private.assignLead(leadToAssign.id, {
+        assignee_id: selectedAssignee.id,
+      });
       Notification.success("Lead assigned successfully");
       await fetchLeads({ page });
     } catch (err) {
@@ -294,7 +280,7 @@ const AdminLeads = () => {
     }
   };
 
-  // === Handlers (bulk) ===
+  // === Bulk handlers ===
   const openBulkAssign = () => {
     if (!hasSelection) {
       Notification.error("Please select at least one lead.");
@@ -343,16 +329,14 @@ const AdminLeads = () => {
     }
   };
 
-  // Bulk selection handlers passed to table
+  // Bulk selection handlers
   const toggleSelect = (id) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
   const toggleSelectAll = (idsOnPage, checked) => {
     if (checked) {
-      // add all not already present
       setSelectedIds((prev) => Array.from(new Set([...prev, ...idsOnPage])));
     } else {
-      // remove all ids from this page
       setSelectedIds((prev) => prev.filter((id) => !idsOnPage.includes(id)));
     }
   };
@@ -368,7 +352,7 @@ const AdminLeads = () => {
       { value: "value_decimal", label: "Value" },
       { value: "created_at", label: "Created at" },
       { value: "updated_at", label: "Updated at" },
-      { value: "assigned_at", label: "Assigned at (latest)" }, // NEW
+      { value: "assigned_at", label: "Assigned at (latest)" },
     ],
     []
   );
@@ -396,8 +380,8 @@ const AdminLeads = () => {
     if (Object.prototype.hasOwnProperty.call(partial, "assigneeId")) setAssigneeId(partial.assigneeId);
     if (Object.prototype.hasOwnProperty.call(partial, "orderBy")) setOrderBy(partial.orderBy);
     if (Object.prototype.hasOwnProperty.call(partial, "orderDir")) setOrderDir(partial.orderDir);
-    if (Object.prototype.hasOwnProperty.call(partial, "assignedFrom")) setAssignedFrom(partial.assignedFrom); // NEW
-    if (Object.prototype.hasOwnProperty.call(partial, "assignedTo")) setAssignedTo(partial.assignedTo); // NEW
+    if (Object.prototype.hasOwnProperty.call(partial, "assignedFrom")) setAssignedFrom(partial.assignedFrom);
+    if (Object.prototype.hasOwnProperty.call(partial, "assignedTo")) setAssignedTo(partial.assignedTo);
   };
 
   const resetAllFilters = () => {
@@ -407,15 +391,14 @@ const AdminLeads = () => {
     setOrderBy("");
     setOrderDir("ASC");
     setSearch("");
-    setAssignedFrom(""); // NEW
-    setAssignedTo(""); // NEW
+    setAssignedFrom("");
+    setAssignedTo("");
   };
 
-  // Rows-per-page change
   const handleLimitChange = (newValue) => {
     const next = Number(newValue) || 25;
-    setLimit((prev) => next);
-    setPage(() => 1);
+    setLimit(next);
+    setPage(1);
   };
 
   const idsOnCurrentPage = useMemo(() => leads.map((l) => l.id), [leads]);
@@ -449,7 +432,6 @@ const AdminLeads = () => {
               <AccentButton
                 text="Add Lead"
                 onClick={() => {
-                  setEditingLead(null);
                   setIsModalOpen(true);
                 }}
               />
@@ -463,7 +445,7 @@ const AdminLeads = () => {
           </div>
         </div>
 
-        {/* Filters & Search Toolbar (now includes Rows selector) */}
+        {/* Filters & Search Toolbar */}
         <LeadsFiltersToolbar
           statuses={statuses}
           sources={sources}
@@ -479,8 +461,8 @@ const AdminLeads = () => {
             orderBy,
             orderDir,
             limit,
-            assignedFrom, // NEW
-            assignedTo, // NEW
+            assignedFrom,
+            assignedTo,
           }}
           limitOptions={limitOptions}
           onLimitChange={handleLimitChange}
@@ -488,7 +470,7 @@ const AdminLeads = () => {
           onResetAll={resetAllFilters}
         />
 
-        {/* Selected counter (subtle) */}
+        {/* Selected counter */}
         {hasSelection && (
           <div className="text-sm text-gray-600">
             <span className="font-medium">{selectedIds.length}</span> selected on this page.
@@ -508,7 +490,6 @@ const AdminLeads = () => {
                 managers={managers}
                 onAssignOptionClick={handleAssignOptionClick}
                 mode="admin"
-                // bulk selection
                 showSelection={true}
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelect}
@@ -524,15 +505,12 @@ const AdminLeads = () => {
           )}
         </div>
 
-        {/* Single-Item Modals */}
+        {/* Add Lead Modal */}
         <LeadFormModal
           isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setEditingLead(null);
-          }}
+          onClose={() => setIsModalOpen(false)}
           onSubmit={handleSubmit}
-          editingLead={editingLead}
+          editingLead={null}
           statuses={statuses}
           sources={sources}
           loading={loading}

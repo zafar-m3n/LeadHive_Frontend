@@ -1,3 +1,4 @@
+// src/pages/admin/components/LeadFormModal.jsx
 import React, { useEffect, useMemo } from "react";
 import Modal from "@/components/ui/Modal";
 import TextInput from "@/components/form/TextInput";
@@ -43,6 +44,8 @@ const LeadFormModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, sourc
       ...data,
       phone: data.phone || null,
       value_decimal: data.value_decimal ? parseFloat(data.value_decimal) : 0.0,
+      // Only send notes when creating a lead
+      notes: editingLead ? undefined : data.notes?.trim() || undefined,
     });
   };
 
@@ -126,17 +129,19 @@ const LeadFormModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, sourc
         </div>
 
         {/* ===================== */}
-        {/* Notes */}
+        {/* Notes (only when creating) */}
         {/* ===================== */}
-        <div className="border-t border-gray-200 pt-4 mt-4">
-          <h3 className="text-xs font-semibold text-gray-600 mb-2">Notes</h3>
-          <textarea
-            {...register("notes")}
-            rows={3}
-            placeholder="Enter notes"
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
-          />
-        </div>
+        {!editingLead && (
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <h3 className="text-xs font-semibold text-gray-600 mb-2">Notes</h3>
+            <textarea
+              {...register("notes")}
+              rows={3}
+              placeholder="Enter notes"
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+        )}
 
         {/* ===================== */}
         {/* Actions */}

@@ -1,5 +1,6 @@
 // src/pages/sales/SalesLeads.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
 import Notification from "@/components/ui/Notification";
@@ -12,7 +13,9 @@ import ConfirmAssignModal from "./components/ConfirmAssignModal";
 import SalesLeadsModal from "./components/SalesLeadsModal";
 import IconComponent from "@/components/ui/Icon";
 
-/** Simple debounce hook */
+/** ============================
+ *  Simple debounce hook
+ *  ============================ */
 const useDebouncedValue = (value, delay = 300) => {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -22,11 +25,12 @@ const useDebouncedValue = (value, delay = 300) => {
   return debounced;
 };
 
-/* ---------- Collapsible managers UI (hidden by default; no conditional rendering) ---------- */
+/** ============================
+ *  Collapsible Managers Card
+ *  ============================ */
 const ManagersList = ({ managers = [] }) => {
   const [open, setOpen] = useState(false);
 
-  // Always render the card; content toggles via classes only
   return (
     <div className="rounded-lg border border-gray-200 bg-white">
       <button
@@ -44,7 +48,6 @@ const ManagersList = ({ managers = [] }) => {
         <IconComponent icon={open ? "mdi:chevron-up" : "mdi:chevron-down"} width={18} />
       </button>
 
-      {/* Content: hidden by default; switches to visible when open */}
       <div
         className={`${
           open ? "visible max-h-[320px] opacity-100" : "hidden max-h-0 opacity-0"
@@ -72,26 +75,35 @@ const ManagersList = ({ managers = [] }) => {
   );
 };
 
+/** ============================
+ *  Component
+ *  ============================ */
 const SalesLeads = () => {
+  const navigate = useNavigate();
+
+  // Data
   const [leads, setLeads] = useState([]);
   const [statuses, setStatuses] = useState([]);
   const [sources, setSources] = useState([]);
-  const [myManagers, setMyManagers] = useState([]); // array of managers
-  const [me, setMe] = useState(null); // current user profile (for selfId)
+  const [myManagers, setMyManagers] = useState([]); // assigned managers
+  const [me, setMe] = useState(null); // current sales rep
 
+  // UI
   const [loading, setLoading] = useState(false);
+
+  // Pagination
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(25); // rows-per-page (same pattern as Admin/Manager)
+  const [limit, setLimit] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Filters / Sorting / Search
+  // Filters
   const [statusId, setStatusId] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [orderBy, setOrderBy] = useState("");
   const [orderDir, setOrderDir] = useState("ASC");
   const [search, setSearch] = useState("");
-  const [assignedFrom, setAssignedFrom] = useState(""); // NEW
-  const [assignedTo, setAssignedTo] = useState(""); // NEW
+  const [assignedFrom, setAssignedFrom] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
 
   // Modals
@@ -104,7 +116,9 @@ const SalesLeads = () => {
 
   const fetchGuard = useRef(0);
 
-  // === API calls ===
+  /** ============================
+   *  API calls
+   *  ============================ */
   const fetchLeads = useCallback(
     async ({ page: pageParam } = {}) => {
       const fetchId = ++fetchGuard.current;
@@ -118,8 +132,8 @@ const SalesLeads = () => {
           orderBy: orderBy || undefined,
           orderDir: orderDir || undefined,
           search: debouncedSearch || undefined,
-          assigned_from: assignedFrom || undefined, // NEW
-          assigned_to: assignedTo || undefined, // NEW
+          assigned_from: assignedFrom || undefined,
+          assigned_to: assignedTo || undefined,
         };
 
         const res = await API.private.getLeads(params);
@@ -162,7 +176,7 @@ const SalesLeads = () => {
 
   const fetchMyManagers = useCallback(async () => {
     try {
-      const res = await API.private.getMyManager(); // returns array
+      const res = await API.private.getMyManager();
       if (res.data?.code === "OK" && Array.isArray(res.data.data)) {
         setMyManagers(res.data.data);
       } else {
@@ -180,7 +194,7 @@ const SalesLeads = () => {
         setMe(res.data.data);
       }
     } catch {
-      // ignore; selfId will be null and reassignment will be disabled
+      // ignore
     }
   }, []);
 
@@ -196,15 +210,16 @@ const SalesLeads = () => {
     fetchLeads({ page });
   }, [page, fetchLeads]);
 
-  // reset page when filters/sort/search/date range/limit change
+  // Reset page on filters
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
   }, [statusId, sourceId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo, limit]);
 
-  // === Handlers ===
+  /** ============================
+   *  Handlers
+   *  ============================ */
   const handleEdit = (lead) => {
-    setEditingLead(lead);
-    setIsModalOpen(true);
+    navigate(`/leads/${lead.id}`);
   };
 
   const handleSubmit = async ({ status_id, notes }) => {
@@ -223,7 +238,6 @@ const SalesLeads = () => {
     }
   };
 
-  // Table passes back the chosen manager
   const handleAssignOptionClick = (lead, managerChoice) => {
     if (!myManagers.length) {
       Notification.error("You are not assigned to a manager.");
@@ -249,6 +263,9 @@ const SalesLeads = () => {
     }
   };
 
+  /** ============================
+   *  Config
+   *  ============================ */
   const sortFields = useMemo(
     () => [
       { value: "", label: "Default (ID)" },
@@ -259,7 +276,7 @@ const SalesLeads = () => {
       { value: "value_decimal", label: "Value" },
       { value: "created_at", label: "Created at" },
       { value: "updated_at", label: "Updated at" },
-      { value: "assigned_at", label: "Assigned at (latest)" }, // NEW
+      { value: "assigned_at", label: "Assigned at (latest)" },
     ],
     []
   );
@@ -269,7 +286,6 @@ const SalesLeads = () => {
     { value: "DESC", label: "Descending" },
   ];
 
-  // Same limit options as Admin/Manager views
   const limitOptions = useMemo(
     () => [
       { value: 10, label: "10" },
@@ -288,13 +304,13 @@ const SalesLeads = () => {
   };
 
   const handleToolbarChange = (partial) => {
-    if (Object.prototype.hasOwnProperty.call(partial, "search")) setSearch(partial.search);
-    if (Object.prototype.hasOwnProperty.call(partial, "statusId")) setStatusId(partial.statusId);
-    if (Object.prototype.hasOwnProperty.call(partial, "sourceId")) setSourceId(partial.sourceId);
-    if (Object.prototype.hasOwnProperty.call(partial, "orderBy")) setOrderBy(partial.orderBy);
-    if (Object.prototype.hasOwnProperty.call(partial, "orderDir")) setOrderDir(partial.orderDir);
-    if (Object.prototype.hasOwnProperty.call(partial, "assignedFrom")) setAssignedFrom(partial.assignedFrom); // NEW
-    if (Object.prototype.hasOwnProperty.call(partial, "assignedTo")) setAssignedTo(partial.assignedTo); // NEW
+    if ("search" in partial) setSearch(partial.search);
+    if ("statusId" in partial) setStatusId(partial.statusId);
+    if ("sourceId" in partial) setSourceId(partial.sourceId);
+    if ("orderBy" in partial) setOrderBy(partial.orderBy);
+    if ("orderDir" in partial) setOrderDir(partial.orderDir);
+    if ("assignedFrom" in partial) setAssignedFrom(partial.assignedFrom);
+    if ("assignedTo" in partial) setAssignedTo(partial.assignedTo);
   };
 
   const resetAllFilters = () => {
@@ -303,14 +319,17 @@ const SalesLeads = () => {
     setOrderBy("");
     setOrderDir("ASC");
     setSearch("");
-    setAssignedFrom(""); // NEW
-    setAssignedTo(""); // NEW
+    setAssignedFrom("");
+    setAssignedTo("");
   };
 
+  /** ============================
+   *  Render
+   *  ============================ */
   return (
     <DefaultLayout>
       <div className="space-y-6">
-        {/* Heading + Managers */}
+        {/* Heading + Managers card */}
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <Heading>My Leads</Heading>
           <div className="w-full md:w-auto md:min-w-[360px]">
@@ -330,12 +349,12 @@ const SalesLeads = () => {
             sourceId,
             orderBy,
             orderDir,
-            limit, // NEW
-            assignedFrom, // NEW
-            assignedTo, // NEW
+            limit,
+            assignedFrom,
+            assignedTo,
           }}
-          limitOptions={limitOptions} // NEW
-          onLimitChange={handleLimitChange} // NEW
+          limitOptions={limitOptions}
+          onLimitChange={handleLimitChange}
           onChange={handleToolbarChange}
           onResetAll={resetAllFilters}
         />

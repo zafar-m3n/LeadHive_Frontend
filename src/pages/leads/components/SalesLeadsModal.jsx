@@ -1,12 +1,9 @@
-// src/pages/sales/components/SalesLeadsModal.jsx
 import React, { useEffect, useMemo } from "react";
 import Modal from "@/components/ui/Modal";
 import Select from "@/components/form/Select";
-import TextInput from "@/components/form/TextInput";
 import AccentButton from "@/components/ui/AccentButton";
 import GrayButton from "@/components/ui/GrayButton";
 import Badge from "@/components/ui/Badge";
-import Icon from "@/components/ui/Icon";
 import { getSourceColor } from "@/utils/leadColors";
 
 import { useForm } from "react-hook-form";
@@ -18,7 +15,6 @@ import * as Yup from "yup";
 // ==========================
 const schema = Yup.object().shape({
   status_id: Yup.string().required("Status is required"),
-  notes: Yup.string().nullable(),
 });
 
 // Display-only row
@@ -33,13 +29,11 @@ const SalesLeadsModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, loa
   const defaultValues = useMemo(
     () => ({
       status_id: editingLead?.status_id || editingLead?.LeadStatus?.id || "",
-      notes: editingLead?.notes || "",
     }),
     [editingLead]
   );
 
   const {
-    register,
     handleSubmit,
     setValue,
     watch,
@@ -57,7 +51,6 @@ const SalesLeadsModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, loa
   const submitHandler = (data) => {
     onSubmit({
       status_id: data.status_id,
-      notes: data.notes ?? null,
     });
   };
 
@@ -105,7 +98,20 @@ const SalesLeadsModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, loa
             </div>
           </div>
 
-          {/* ===== Compact Details (trimmed to essentials) ===== */}
+          {/* ===== Status Update (only editable field) ===== */}
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+            <h3 className="text-xs font-semibold text-gray-600 mb-3">Update Status</h3>
+            <Select
+              label="Status"
+              value={watch("status_id") || ""}
+              onChange={(val) => setValue("status_id", val)}
+              options={statuses}
+              placeholder="Select Status"
+              error={errors.status_id?.message}
+            />
+          </div>
+
+          {/* ===== Compact Details (read-only) ===== */}
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <KV label="Company" value={editingLead?.company || "-"} />
@@ -113,30 +119,6 @@ const SalesLeadsModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, loa
               <KV label="Value" value={editingLead?.value_decimal ?? "-"} />
             </div>
           </div>
-
-          {/* ===== Update panel (editable only) ===== */}
-          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
-            <h3 className="text-xs font-semibold text-gray-600 mb-3">Update</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <Select
-                label="Status"
-                value={watch("status_id") || ""}
-                onChange={(val) => setValue("status_id", val)}
-                options={statuses}
-                placeholder="Select Status"
-                error={errors.status_id?.message}
-              />
-              <div className="md:col-span-2">
-                <TextInput
-                  label="Notes"
-                  placeholder="Type a short note..."
-                  {...register("notes")}
-                  error={errors.notes?.message}
-                />
-              </div>
-            </div>
-          </div>
-
           {/* ===== Actions ===== */}
           <div className="pt-1 flex justify-end gap-2">
             <GrayButton text="Cancel" onClick={onClose} />
