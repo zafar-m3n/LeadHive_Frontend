@@ -168,7 +168,7 @@ const LeadsFiltersToolbar = ({
       <div className="flex flex-col gap-3 md:flex-row md:items-end">
         <div className="flex-1">
           <TextInput
-            label="Search (name / email)"
+            label="Search (name / email / phone)"
             placeholder="Type to search…"
             value={search}
             onChange={(e) => onChange({ search: e.target.value })}
