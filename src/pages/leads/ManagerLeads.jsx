@@ -15,6 +15,7 @@ import ConfirmAssignModal from "./components/ConfirmAssignModal";
 import Modal from "@/components/ui/Modal";
 import Select from "@/components/form/Select";
 import GrayButton from "@/components/ui/GrayButton";
+import token from "@/lib/utilities";
 
 /** Simple debounce hook */
 const useDebouncedValue = (value, delay = 300) => {
@@ -26,8 +27,41 @@ const useDebouncedValue = (value, delay = 300) => {
   return debounced;
 };
 
+// Defaults (note: search is NEVER persisted)
+const DEFAULT_FILTERS = {
+  search: "",
+  statusId: "",
+  sourceId: "",
+  assigneeId: "",
+  orderBy: "",
+  orderDir: "ASC",
+  assignedFrom: "",
+  assignedTo: "",
+  limit: 25,
+  page: 1,
+};
+
+// Read once from storage (sync) and build initial state
+const getInitialFilters = () => {
+  const stored = token.getPersistedLeadsFilters(DEFAULT_FILTERS) || {};
+  return {
+    statusId: stored.statusId ?? DEFAULT_FILTERS.statusId,
+    sourceId: stored.sourceId ?? DEFAULT_FILTERS.sourceId,
+    assigneeId: stored.assigneeId ?? DEFAULT_FILTERS.assigneeId,
+    orderBy: stored.orderBy ?? DEFAULT_FILTERS.orderBy,
+    orderDir: stored.orderDir ?? DEFAULT_FILTERS.orderDir,
+    assignedFrom: stored.assignedFrom ?? DEFAULT_FILTERS.assignedFrom,
+    assignedTo: stored.assignedTo ?? DEFAULT_FILTERS.assignedTo,
+    limit: Number(stored.limit ?? DEFAULT_FILTERS.limit),
+    page: Number(stored.page ?? DEFAULT_FILTERS.page),
+    // IMPORTANT: search is volatile (never persisted)
+    search: DEFAULT_FILTERS.search,
+  };
+};
+
 const ManagerLeads = () => {
   const navigate = useNavigate();
+
   // Data
   const [leads, setLeads] = useState([]);
   const [statuses, setStatuses] = useState([]);
@@ -49,20 +83,23 @@ const ManagerLeads = () => {
   // UI
   const [loading, setLoading] = useState(false);
 
+  // ---------- Hydrated initial state (from localStorage) ----------
+  const initial = useRef(getInitialFilters()).current;
+
   // Pagination
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(25); // match AdminLeads pattern
+  const [page, setPage] = useState(() => initial.page);
+  const [limit, setLimit] = useState(() => initial.limit);
   const [totalPages, setTotalPages] = useState(1);
 
   // Filters / Sorting / Search
-  const [statusId, setStatusId] = useState("");
-  const [sourceId, setSourceId] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
-  const [orderBy, setOrderBy] = useState("");
-  const [orderDir, setOrderDir] = useState("ASC");
-  const [search, setSearch] = useState("");
-  const [assignedFrom, setAssignedFrom] = useState(""); // NEW
-  const [assignedTo, setAssignedTo] = useState(""); // NEW
+  const [statusId, setStatusId] = useState(() => initial.statusId);
+  const [sourceId, setSourceId] = useState(() => initial.sourceId);
+  const [assigneeId, setAssigneeId] = useState(() => initial.assigneeId);
+  const [orderBy, setOrderBy] = useState(() => initial.orderBy);
+  const [orderDir, setOrderDir] = useState(() => initial.orderDir);
+  const [search, setSearch] = useState(() => initial.search); // never persisted
+  const [assignedFrom, setAssignedFrom] = useState(() => initial.assignedFrom);
+  const [assignedTo, setAssignedTo] = useState(() => initial.assignedTo);
   const debouncedSearch = useDebouncedValue(search, 300);
 
   // Modals (single lead)
@@ -90,40 +127,37 @@ const ManagerLeads = () => {
   const fetchGuard = useRef(0);
 
   // === API calls ===
-  const fetchLeads = useCallback(
-    async ({ page: pageParam } = {}) => {
-      const fetchId = ++fetchGuard.current;
-      setLoading(true);
-      try {
-        const params = {
-          page: pageParam ?? 1,
-          limit,
-          status_id: statusId || undefined,
-          source_id: sourceId || undefined,
-          assignee_id: assigneeId || undefined, // manager can filter by any assignee
-          orderBy: orderBy || undefined,
-          orderDir: orderDir || undefined,
-          search: debouncedSearch || undefined,
-          assigned_from: assignedFrom || undefined, // NEW
-          assigned_to: assignedTo || undefined, // NEW
-        };
+  const fetchLeads = useCallback(async () => {
+    const fetchId = ++fetchGuard.current;
+    setLoading(true);
+    try {
+      const params = {
+        page: page ?? 1,
+        limit,
+        status_id: statusId || undefined,
+        source_id: sourceId || undefined,
+        assignee_id: assigneeId || undefined, // manager can filter by any assignee
+        orderBy: orderBy || undefined,
+        orderDir: orderDir || undefined,
+        search: debouncedSearch || undefined,
+        assigned_from: assignedFrom || undefined,
+        assigned_to: assignedTo || undefined,
+      };
 
-        const res = await API.private.getLeads(params);
-        if (fetchId !== fetchGuard.current) return;
+      const res = await API.private.getLeads(params);
+      if (fetchId !== fetchGuard.current) return;
 
-        if (res.data?.code === "OK") {
-          setLeads(res.data.data.leads || []);
-          setTotalPages(res.data.data.pagination.totalPages);
-          setSelectedIds([]); // clear selection when (re)loading
-        }
-      } catch (err) {
-        Notification.error(err.response?.data?.error || "Failed to fetch leads");
-      } finally {
-        if (fetchId === fetchGuard.current) setLoading(false);
+      if (res.data?.code === "OK") {
+        setLeads(res.data.data.leads || []);
+        setTotalPages(res.data.data.pagination.totalPages);
+        setSelectedIds([]); // clear selection when (re)loading
       }
-    },
-    [limit, statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo]
-  );
+    } catch (err) {
+      Notification.error(err.response?.data?.error || "Failed to fetch leads");
+    } finally {
+      if (fetchId === fetchGuard.current) setLoading(false);
+    }
+  }, [page, limit, statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo]);
 
   const fetchStatuses = useCallback(async () => {
     try {
@@ -196,15 +230,31 @@ const ManagerLeads = () => {
     fetchBulkTargets(); // bulk assign targets
   }, [fetchStatuses, fetchSources, fetchAssignableUsers, fetchAssignees, fetchBulkTargets]);
 
-  // Fetch when page changes
+  // Initial and subsequent fetches — because initial state is already hydrated,
+  // this runs once with the correct persisted values.
   useEffect(() => {
-    fetchLeads({ page });
-  }, [page, fetchLeads]);
+    fetchLeads();
+  }, [fetchLeads]);
 
   // Reset page when filters/sort/search/date range/limit change
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
   }, [statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo, limit]);
+
+  // Persist everything EXCEPT search
+  useEffect(() => {
+    token.setPersistedLeadsFilters({
+      statusId,
+      sourceId,
+      assigneeId,
+      orderBy,
+      orderDir,
+      assignedFrom,
+      assignedTo,
+      limit,
+      page,
+    });
+  }, [statusId, sourceId, assigneeId, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
 
   // === Handlers (single) ===
   const handleSubmit = async (data) => {
@@ -217,7 +267,7 @@ const ManagerLeads = () => {
         await API.private.createLead(data);
         Notification.success("Lead created successfully");
       }
-      await fetchLeads({ page });
+      await fetchLeads();
       setIsModalOpen(false);
       setEditingLead(null);
     } catch (err) {
@@ -241,7 +291,7 @@ const ManagerLeads = () => {
     try {
       await API.private.deleteLead(leadToDelete.id);
       Notification.success("Lead deleted successfully");
-      await fetchLeads({ page });
+      await fetchLeads();
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to delete lead");
     } finally {
@@ -261,7 +311,7 @@ const ManagerLeads = () => {
     try {
       await API.private.assignLead(leadToAssign.id, { assignee_id: selectedAssignee.id });
       Notification.success("Lead assigned successfully");
-      await fetchLeads({ page });
+      await fetchLeads();
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to assign lead");
     } finally {
@@ -303,7 +353,7 @@ const ManagerLeads = () => {
       });
       Notification.success("Leads assigned successfully");
       setBulkAssignOpen(false);
-      await fetchLeads({ page });
+      await fetchLeads();
     } catch (err) {
       Notification.error(err.response?.data?.error || "Bulk assign failed");
     }
@@ -314,7 +364,7 @@ const ManagerLeads = () => {
       await API.private.bulkDeleteLeads(selectedIds);
       Notification.success("Leads deleted successfully");
       setBulkDeleteOpen(false);
-      await fetchLeads({ page });
+      await fetchLeads();
     } catch (err) {
       Notification.error(err.response?.data?.error || "Bulk delete failed");
     }
@@ -343,7 +393,7 @@ const ManagerLeads = () => {
       { value: "value_decimal", label: "Value" },
       { value: "created_at", label: "Created at" },
       { value: "updated_at", label: "Updated at" },
-      { value: "assigned_at", label: "Assigned at (latest)" }, // NEW
+      { value: "assigned_at", label: "Assigned at (latest)" },
     ],
     []
   );
@@ -367,7 +417,7 @@ const ManagerLeads = () => {
 
   // Rows-per-page change (same as AdminLeads)
   const handleLimitChange = (newValue) => {
-    const next = Number(newValue) || 25;
+    const next = Number(newValue) || DEFAULT_FILTERS.limit;
     setLimit(next);
     setPage(1);
   };
@@ -379,19 +429,34 @@ const ManagerLeads = () => {
     if (Object.prototype.hasOwnProperty.call(partial, "assigneeId")) setAssigneeId(partial.assigneeId);
     if (Object.prototype.hasOwnProperty.call(partial, "orderBy")) setOrderBy(partial.orderBy);
     if (Object.prototype.hasOwnProperty.call(partial, "orderDir")) setOrderDir(partial.orderDir);
-    if (Object.prototype.hasOwnProperty.call(partial, "assignedFrom")) setAssignedFrom(partial.assignedFrom); // NEW
-    if (Object.prototype.hasOwnProperty.call(partial, "assignedTo")) setAssignedTo(partial.assignedTo); // NEW
+    if (Object.prototype.hasOwnProperty.call(partial, "assignedFrom")) setAssignedFrom(partial.assignedFrom);
+    if (Object.prototype.hasOwnProperty.call(partial, "assignedTo")) setAssignedTo(partial.assignedTo);
   };
 
   const resetAllFilters = () => {
-    setStatusId("");
-    setSourceId("");
-    setAssigneeId("");
-    setOrderBy("");
-    setOrderDir("ASC");
-    setSearch("");
-    setAssignedFrom(""); // NEW
-    setAssignedTo(""); // NEW
+    setStatusId(DEFAULT_FILTERS.statusId);
+    setSourceId(DEFAULT_FILTERS.sourceId);
+    setAssigneeId(DEFAULT_FILTERS.assigneeId);
+    setOrderBy(DEFAULT_FILTERS.orderBy);
+    setOrderDir(DEFAULT_FILTERS.orderDir);
+    setSearch(DEFAULT_FILTERS.search); // not persisted
+    setAssignedFrom(DEFAULT_FILTERS.assignedFrom);
+    setAssignedTo(DEFAULT_FILTERS.assignedTo);
+    setLimit(DEFAULT_FILTERS.limit);
+    setPage(DEFAULT_FILTERS.page);
+
+    // Persist everything EXCEPT search
+    token.setPersistedLeadsFilters({
+      statusId: DEFAULT_FILTERS.statusId,
+      sourceId: DEFAULT_FILTERS.sourceId,
+      assigneeId: DEFAULT_FILTERS.assigneeId,
+      orderBy: DEFAULT_FILTERS.orderBy,
+      orderDir: DEFAULT_FILTERS.orderDir,
+      assignedFrom: DEFAULT_FILTERS.assignedFrom,
+      assignedTo: DEFAULT_FILTERS.assignedTo,
+      limit: DEFAULT_FILTERS.limit,
+      page: DEFAULT_FILTERS.page,
+    });
   };
 
   const idsOnCurrentPage = useMemo(() => leads.map((l) => l.id), [leads]);
@@ -447,12 +512,12 @@ const ManagerLeads = () => {
             assigneeId,
             orderBy,
             orderDir,
-            limit, // NEW
-            assignedFrom, // NEW
-            assignedTo, // NEW
+            limit,
+            assignedFrom,
+            assignedTo,
           }}
-          limitOptions={limitOptions} // NEW
-          onLimitChange={handleLimitChange} // NEW
+          limitOptions={limitOptions}
+          onLimitChange={handleLimitChange}
           onChange={handleToolbarChange}
           onResetAll={resetAllFilters}
         />

@@ -1,9 +1,9 @@
-// src/lib/utilities.js
 import { jwtDecode } from "jwt-decode";
 
 const TOKEN_KEY = "leadhive.token";
 const USER_KEY = "leadhive.user";
 const LOGOUT_BCAST_KEY = "leadhive.logout_at"; // storage event key for cross-tab sync
+const LEADS_FILTERS_KEY = "leadhive.filters.leadsList";
 const SKEW_MS = 2000; // fire slightly early to avoid edge races
 
 let logoutTimerId = null;
@@ -62,6 +62,40 @@ const isExpired = () => {
 };
 
 /* ---------------------------
+ * Filters persistence: Leads List only
+ * --------------------------*/
+const safeParse = (raw, fallback = null) => {
+  try {
+    return raw == null ? fallback : JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+};
+
+// Read filters; returns an object (never null)
+const getPersistedLeadsFilters = (fallback = {}) => {
+  const obj = safeParse(localStorage.getItem(LEADS_FILTERS_KEY), null);
+  return obj && typeof obj === "object" ? obj : { ...fallback };
+};
+
+// Replace filters with a full object
+const setPersistedLeadsFilters = (filtersObj) => {
+  localStorage.setItem(LEADS_FILTERS_KEY, JSON.stringify(filtersObj ?? {}));
+};
+
+// Shallow-merge patch into existing filters
+const updatePersistedLeadsFilters = (patchObj) => {
+  const current = getPersistedLeadsFilters({});
+  const next = { ...current, ...(patchObj ?? {}) };
+  setPersistedLeadsFilters(next);
+};
+
+// Remove filters
+const clearPersistedLeadsFilters = () => {
+  localStorage.removeItem(LEADS_FILTERS_KEY);
+};
+
+/* ---------------------------
  * Logout + scheduling
  * --------------------------*/
 const clearLogoutTimer = () => {
@@ -78,6 +112,7 @@ const broadcastLogout = () => {
 
 const logout = () => {
   clearLogoutTimer();
+  clearPersistedLeadsFilters();
   removeAuthToken();
   removeUserData();
   broadcastLogout();
@@ -122,6 +157,7 @@ const initAuthSession = (handleExpire) => {
   // Cross-tab sync: if any tab writes LOGOUT_BCAST_KEY, logout here too
   window.addEventListener("storage", (e) => {
     if (e.key === LOGOUT_BCAST_KEY) {
+      clearPersistedLeadsFilters();
       clearLogoutTimer();
       removeAuthToken();
       removeUserData();
@@ -151,6 +187,12 @@ const token = {
   initAuthSession,
   scheduleAutoLogout,
   logout,
+
+  // leads filters (single-scope)
+  getPersistedLeadsFilters,
+  setPersistedLeadsFilters,
+  updatePersistedLeadsFilters,
+  clearPersistedLeadsFilters,
 };
 
 export default token;

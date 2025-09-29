@@ -12,6 +12,7 @@ import LeadsFiltersToolbar from "./components/LeadsFiltersToolbar";
 import ConfirmAssignModal from "./components/ConfirmAssignModal";
 import SalesLeadsModal from "./components/SalesLeadsModal";
 import IconComponent from "@/components/ui/Icon";
+import token from "@/lib/utilities";
 
 /** ============================
  *  Simple debounce hook
@@ -23,6 +24,39 @@ const useDebouncedValue = (value, delay = 300) => {
     return () => clearTimeout(t);
   }, [value, delay]);
   return debounced;
+};
+
+/** ============================
+ *  Persisted filter defaults
+ *  (search is NEVER persisted)
+ *  ============================ */
+const DEFAULT_FILTERS = {
+  search: "",
+  statusId: "",
+  sourceId: "",
+  orderBy: "",
+  orderDir: "ASC",
+  assignedFrom: "",
+  assignedTo: "",
+  limit: 25,
+  page: 1,
+};
+
+// Read once from storage (sync) and build initial state
+const getInitialFilters = () => {
+  const stored = token.getPersistedLeadsFilters(DEFAULT_FILTERS) || {};
+  return {
+    statusId: stored.statusId ?? DEFAULT_FILTERS.statusId,
+    sourceId: stored.sourceId ?? DEFAULT_FILTERS.sourceId,
+    orderBy: stored.orderBy ?? DEFAULT_FILTERS.orderBy,
+    orderDir: stored.orderDir ?? DEFAULT_FILTERS.orderDir,
+    assignedFrom: stored.assignedFrom ?? DEFAULT_FILTERS.assignedFrom,
+    assignedTo: stored.assignedTo ?? DEFAULT_FILTERS.assignedTo,
+    limit: Number(stored.limit ?? DEFAULT_FILTERS.limit),
+    page: Number(stored.page ?? DEFAULT_FILTERS.page),
+    // volatile: never persisted
+    search: DEFAULT_FILTERS.search,
+  };
 };
 
 /** ============================
@@ -91,19 +125,22 @@ const SalesLeads = () => {
   // UI
   const [loading, setLoading] = useState(false);
 
+  // ---------- Hydrated initial state (from localStorage) ----------
+  const initial = useRef(getInitialFilters()).current;
+
   // Pagination
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(25);
+  const [page, setPage] = useState(() => initial.page);
+  const [limit, setLimit] = useState(() => initial.limit);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Filters
-  const [statusId, setStatusId] = useState("");
-  const [sourceId, setSourceId] = useState("");
-  const [orderBy, setOrderBy] = useState("");
-  const [orderDir, setOrderDir] = useState("ASC");
-  const [search, setSearch] = useState("");
-  const [assignedFrom, setAssignedFrom] = useState("");
-  const [assignedTo, setAssignedTo] = useState("");
+  // Filters (search not persisted)
+  const [statusId, setStatusId] = useState(() => initial.statusId);
+  const [sourceId, setSourceId] = useState(() => initial.sourceId);
+  const [orderBy, setOrderBy] = useState(() => initial.orderBy);
+  const [orderDir, setOrderDir] = useState(() => initial.orderDir);
+  const [search, setSearch] = useState(() => initial.search);
+  const [assignedFrom, setAssignedFrom] = useState(() => initial.assignedFrom);
+  const [assignedTo, setAssignedTo] = useState(() => initial.assignedTo);
   const debouncedSearch = useDebouncedValue(search, 300);
 
   // Modals
@@ -119,38 +156,35 @@ const SalesLeads = () => {
   /** ============================
    *  API calls
    *  ============================ */
-  const fetchLeads = useCallback(
-    async ({ page: pageParam } = {}) => {
-      const fetchId = ++fetchGuard.current;
-      setLoading(true);
-      try {
-        const params = {
-          page: pageParam ?? 1,
-          limit,
-          status_id: statusId || undefined,
-          source_id: sourceId || undefined,
-          orderBy: orderBy || undefined,
-          orderDir: orderDir || undefined,
-          search: debouncedSearch || undefined,
-          assigned_from: assignedFrom || undefined,
-          assigned_to: assignedTo || undefined,
-        };
+  const fetchLeads = useCallback(async () => {
+    const fetchId = ++fetchGuard.current;
+    setLoading(true);
+    try {
+      const params = {
+        page: page ?? 1,
+        limit,
+        status_id: statusId || undefined,
+        source_id: sourceId || undefined,
+        orderBy: orderBy || undefined,
+        orderDir: orderDir || undefined,
+        search: debouncedSearch || undefined,
+        assigned_from: assignedFrom || undefined,
+        assigned_to: assignedTo || undefined,
+      };
 
-        const res = await API.private.getLeads(params);
-        if (fetchId !== fetchGuard.current) return;
+      const res = await API.private.getLeads(params);
+      if (fetchId !== fetchGuard.current) return;
 
-        if (res.data?.code === "OK") {
-          setLeads(res.data.data.leads || []);
-          setTotalPages(res.data.data.pagination.totalPages);
-        }
-      } catch (err) {
-        Notification.error(err.response?.data?.error || "Failed to fetch leads");
-      } finally {
-        if (fetchId === fetchGuard.current) setLoading(false);
+      if (res.data?.code === "OK") {
+        setLeads(res.data.data.leads || []);
+        setTotalPages(res.data.data.pagination.totalPages);
       }
-    },
-    [limit, statusId, sourceId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo]
-  );
+    } catch (err) {
+      Notification.error(err.response?.data?.error || "Failed to fetch leads");
+    } finally {
+      if (fetchId === fetchGuard.current) setLoading(false);
+    }
+  }, [page, limit, statusId, sourceId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo]);
 
   const fetchStatuses = useCallback(async () => {
     try {
@@ -198,7 +232,7 @@ const SalesLeads = () => {
     }
   }, []);
 
-  // Initial loads
+  // Initial loads (lookups)
   useEffect(() => {
     fetchStatuses();
     fetchSources();
@@ -206,14 +240,30 @@ const SalesLeads = () => {
     fetchProfile();
   }, [fetchStatuses, fetchSources, fetchMyManagers, fetchProfile]);
 
+  // Initial + subsequent fetches — runs once immediately with hydrated values,
+  // and then whenever dependencies change (including page).
   useEffect(() => {
-    fetchLeads({ page });
-  }, [page, fetchLeads]);
+    fetchLeads();
+  }, [fetchLeads]);
 
-  // Reset page on filters
+  // Reset page to 1 when any filter/sort/limit/search/date range changes
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
   }, [statusId, sourceId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo, limit]);
+
+  // Persist everything EXCEPT search
+  useEffect(() => {
+    token.setPersistedLeadsFilters({
+      statusId,
+      sourceId,
+      orderBy,
+      orderDir,
+      assignedFrom,
+      assignedTo,
+      limit,
+      page,
+    });
+  }, [statusId, sourceId, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
 
   /** ============================
    *  Handlers
@@ -228,7 +278,7 @@ const SalesLeads = () => {
     try {
       await API.private.updateLead(editingLead.id, { status_id, notes });
       Notification.success("Lead updated successfully");
-      await fetchLeads({ page });
+      await fetchLeads();
       setIsModalOpen(false);
       setEditingLead(null);
     } catch (err) {
@@ -253,7 +303,7 @@ const SalesLeads = () => {
     try {
       await API.private.assignLead(leadToAssign.id, { assignee_id: selectedAssignee.id });
       Notification.success("Lead assigned to your manager");
-      await fetchLeads({ page });
+      await fetchLeads();
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to assign lead");
     } finally {
@@ -298,7 +348,7 @@ const SalesLeads = () => {
   );
 
   const handleLimitChange = (newValue) => {
-    const next = Number(newValue) || 25;
+    const next = Number(newValue) || DEFAULT_FILTERS.limit;
     setLimit(next);
     setPage(1);
   };
@@ -314,13 +364,27 @@ const SalesLeads = () => {
   };
 
   const resetAllFilters = () => {
-    setStatusId("");
-    setSourceId("");
-    setOrderBy("");
-    setOrderDir("ASC");
-    setSearch("");
-    setAssignedFrom("");
-    setAssignedTo("");
+    setStatusId(DEFAULT_FILTERS.statusId);
+    setSourceId(DEFAULT_FILTERS.sourceId);
+    setOrderBy(DEFAULT_FILTERS.orderBy);
+    setOrderDir(DEFAULT_FILTERS.orderDir);
+    setSearch(DEFAULT_FILTERS.search); // not persisted
+    setAssignedFrom(DEFAULT_FILTERS.assignedFrom);
+    setAssignedTo(DEFAULT_FILTERS.assignedTo);
+    setLimit(DEFAULT_FILTERS.limit);
+    setPage(DEFAULT_FILTERS.page);
+
+    // persist everything EXCEPT search
+    token.setPersistedLeadsFilters({
+      statusId: DEFAULT_FILTERS.statusId,
+      sourceId: DEFAULT_FILTERS.sourceId,
+      orderBy: DEFAULT_FILTERS.orderBy,
+      orderDir: DEFAULT_FILTERS.orderDir,
+      assignedFrom: DEFAULT_FILTERS.assignedFrom,
+      assignedTo: DEFAULT_FILTERS.assignedTo,
+      limit: DEFAULT_FILTERS.limit,
+      page: DEFAULT_FILTERS.page,
+    });
   };
 
   /** ============================
