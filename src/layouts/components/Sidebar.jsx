@@ -1,6 +1,7 @@
 import React from "react";
 import SidebarMenu from "./SidebarMenu";
 import logo from "@/assets/logo.png";
+import favicon from "@/assets/favicon.png";
 import token from "@/lib/utilities";
 
 const Sidebar = ({ menuOpen }) => {
