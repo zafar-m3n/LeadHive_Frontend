@@ -144,7 +144,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* Recent Leads */}
-        <section className="rounded-xl border border-gray-200 p-5 bg-white">
+        {/* <section className="rounded-xl border border-gray-200 p-5 bg-white">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Leads (5)</h2>
           <Table
             columns={columns}
@@ -175,7 +175,7 @@ const AdminDashboard = () => {
               }
             }}
           />
-        </section>
+        </section> */}
       </div>
     </DefaultLayout>
   );
