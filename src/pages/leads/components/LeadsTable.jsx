@@ -4,7 +4,6 @@ import Badge from "@/components/ui/Badge";
 import IconComponent from "@/components/ui/Icon";
 import Tooltip from "@/components/ui/Tooltip";
 import { getStatusColor, getSourceColor } from "@/utils/leadColors";
-import countryList from "react-select-country-list";
 
 const MENU_WIDTH = 260;
 const BASE_MAX_HEIGHT = 288;
@@ -25,12 +24,19 @@ const LeadsTable = ({
   mode = "manager",
   selfId = null,
 
+  // Inline status edit
+  statuses = [],
+  onStatusUpdate, // (lead, statusOption) => Promise | void
+
   // Bulk selection
   showSelection = false,
   selectedIds = [],
   onToggleSelect = () => {},
   onToggleSelectAll = () => {},
 }) => {
+  // -------------------------
+  // Assignee dropdown state
+  // -------------------------
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [openLead, setOpenLead] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({
@@ -42,46 +48,94 @@ const LeadsTable = ({
   });
   const [assigneeQuery, setAssigneeQuery] = useState("");
 
-  // Country helpers
-  const countries = useMemo(() => countryList(), []);
-  const toCountryCode = useCallback(
-    (raw) => {
-      if (!raw) return "-";
-      const t = String(raw).trim();
-      if (!t) return "-";
-      if (t.length === 2) return t.toUpperCase();
-      const code = countries.getValue(t);
-      return code || "-";
-    },
-    [countries]
-  );
+  // -------------------------
+  // Status dropdown state (no search UI)
+  // -------------------------
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(null);
+  const [openLeadStatus, setOpenLeadStatus] = useState(null);
+  const [statusDropdownPos, setStatusDropdownPos] = useState({
+    top: 0,
+    left: 0,
+    placeAbove: false,
+    alignRight: false,
+    maxHeight: BASE_MAX_HEIGHT,
+  });
 
-  const closeDropdown = useCallback(() => {
+  // =========================
+  // Helpers
+  // =========================
+  // Normalize status option to always have an 'id'
+  const normStatus = useCallback((s) => {
+    if (!s) return null;
+    return {
+      id: s.id ?? s.value, // your SalesLeads provides { value: <id>, label }
+      value: s.value, // may be number (id) or the API 'value' if you pass it through
+      label: s.label ?? String(s.id ?? s.value ?? ""),
+      _raw: s,
+    };
+  }, []);
+
+  const sameStatusById = useCallback((lead, s) => {
+    const sid = s?.id;
+    if (!lead || !sid) return false;
+    const currentId = lead?.LeadStatus?.id ?? lead?.status_id;
+    return Number(currentId) === Number(sid);
+  }, []);
+
+  const formatDateTime = useCallback((iso) => {
+    if (!iso) return "-";
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "-";
+    }
+  }, []);
+
+  // Close helpers
+  const closeAssigneeDropdown = useCallback(() => {
     setDropdownOpen(null);
     setOpenLead(null);
     setAssigneeQuery("");
   }, []);
+  const closeStatusDropdown = useCallback(() => {
+    setStatusDropdownOpen(null);
+    setOpenLeadStatus(null);
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (!e.target.closest(".assignee-trigger") && !e.target.closest(".assignee-portal-dropdown")) {
-        closeDropdown();
+      const isAssignee = e.target.closest(".assignee-trigger") || e.target.closest(".assignee-portal-dropdown");
+      const isStatus = e.target.closest(".status-trigger") || e.target.closest(".status-portal-dropdown");
+
+      if (!isAssignee) closeAssigneeDropdown();
+      if (!isStatus) closeStatusDropdown();
+    };
+    const handleEsc = (e) => {
+      if (e.key === "Escape") {
+        closeAssigneeDropdown();
+        closeStatusDropdown();
       }
     };
-    const handleEsc = (e) => e.key === "Escape" && closeDropdown();
     document.addEventListener("click", handleClickOutside);
     document.addEventListener("keydown", handleEsc);
     return () => {
       document.removeEventListener("click", handleClickOutside);
       document.removeEventListener("keydown", handleEsc);
     };
-  }, [closeDropdown]);
+  }, [closeAssigneeDropdown, closeStatusDropdown]);
 
   // Close if page changes and lead disappears
   useEffect(() => {
-    if (!dropdownOpen) return;
-    if (!leads.some((l) => l.id === dropdownOpen)) closeDropdown();
-  }, [leads, dropdownOpen, closeDropdown]);
+    if (dropdownOpen && !leads.some((l) => l.id === dropdownOpen)) closeAssigneeDropdown();
+    if (statusDropdownOpen && !leads.some((l) => l.id === statusDropdownOpen)) closeStatusDropdown();
+  }, [leads, dropdownOpen, statusDropdownOpen, closeAssigneeDropdown, closeStatusDropdown]);
 
   // Reposition while open
   useEffect(() => {
@@ -90,7 +144,7 @@ const LeadsTable = ({
       const trigger = document.querySelector(`[data-assignee-trigger="${dropdownOpen}"]`);
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
-      computeAndSetPosition(rect);
+      computeAndSetPosition(rect, setDropdownPos);
     };
     window.addEventListener("scroll", updatePos, true);
     window.addEventListener("resize", updatePos);
@@ -100,7 +154,23 @@ const LeadsTable = ({
     };
   }, [dropdownOpen]);
 
-  const computeAndSetPosition = (rect) => {
+  useEffect(() => {
+    if (!statusDropdownOpen) return;
+    const updatePos = () => {
+      const trigger = document.querySelector(`[data-status-trigger="${statusDropdownOpen}"]`);
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      computeAndSetPosition(rect, setStatusDropdownPos);
+    };
+    window.addEventListener("scroll", updatePos, true);
+    window.addEventListener("resize", updatePos);
+    return () => {
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
+    };
+  }, [statusDropdownOpen]);
+
+  const computeAndSetPosition = (rect, setter) => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
@@ -124,7 +194,7 @@ const LeadsTable = ({
       maxAvailable = Math.max(160, Math.min(BASE_MAX_HEIGHT, spaceBelow));
     }
 
-    setDropdownPos({ top, left, placeAbove, alignRight: overflowRight, maxHeight: maxAvailable });
+    setter({ top, left, placeAbove, alignRight: overflowRight, maxHeight: maxAvailable });
   };
 
   // Latest assignment helpers
@@ -137,15 +207,31 @@ const LeadsTable = ({
   const getCurrentAssignee = (lead) => getLatestAssignment(lead)?.assignee || null;
   const getCurrentAssigneeName = (lead) => getCurrentAssignee(lead)?.full_name || "-";
 
-  const toggleDropdown = (lead, e) => {
+  // Toggle handlers
+  const toggleAssigneeDropdown = (lead, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
+    // close status menu if open
+    closeStatusDropdown();
     if (dropdownOpen === lead.id) {
-      closeDropdown();
+      closeAssigneeDropdown();
     } else {
-      computeAndSetPosition(rect);
+      computeAndSetPosition(rect, setDropdownPos);
       setDropdownOpen(lead.id);
       setOpenLead(lead);
       setAssigneeQuery("");
+    }
+  };
+
+  const toggleStatusDropdown = (lead, e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    // close assignee menu if open
+    closeAssigneeDropdown();
+    if (statusDropdownOpen === lead.id) {
+      closeStatusDropdown();
+    } else {
+      computeAndSetPosition(rect, setStatusDropdownPos);
+      setStatusDropdownOpen(lead.id);
+      setOpenLeadStatus(lead);
     }
   };
 
@@ -157,13 +243,10 @@ const LeadsTable = ({
     [managers]
   );
 
-  const dropdownTargets = useMemo(() => {
-    const list = managers || [];
-    return list;
-  }, [managers, mode, teamSet]);
+  const dropdownTargets = useMemo(() => managers || [], [managers]);
 
   // =========================
-  // Permission to open dropdown
+  // Permission to open dropdowns
   // =========================
   const canReassign = (lead) => {
     if (mode === "admin") return true;
@@ -176,12 +259,14 @@ const LeadsTable = ({
       if (!selfId) return false;
       return Number(current.role_id) === ROLE.SALES_REP && Number(current.id) === Number(selfId);
     }
-
     return false;
   };
 
-  // Filter dropdown options by search text
-  const filteredTargets = useMemo(() => {
+  // For status: allow everyone (matches modal behavior for sales)
+  const canEditStatus = () => true;
+
+  // Filter assignees by search text (status has no search)
+  const filteredAssigneeTargets = useMemo(() => {
     const q = assigneeQuery.trim().toLowerCase();
     if (!q) return dropdownTargets;
     return dropdownTargets.filter(
@@ -195,10 +280,27 @@ const LeadsTable = ({
   const W_COMPANY = "w-[175px]";
   const W_PHONE = "w-[100px]";
   const W_ASSIGNEE = "w-[175px]";
+  const W_DATE = "w-[170px]";
 
   const allOnPageChecked = showSelection && leads.length > 0 && leads.every((l) => selectedIds.includes(l.id));
   const someOnPageChecked =
     showSelection && leads.length > 0 && leads.some((l) => selectedIds.includes(l.id)) && !allOnPageChecked;
+
+  // Show/hide columns
+  const showAssigneeCol = mode !== "sales";
+
+  // Compute dynamic colSpan for empty state
+  const colsCount =
+    (showSelection ? 1 : 0) + // selection
+    1 + // lead
+    1 + // company
+    1 + // phone (hidden md)
+    1 + // status
+    1 + // source (hidden md)
+    1 + // created
+    1 + // last contacted
+    (showAssigneeCol ? 1 : 0) + // assignee (conditional)
+    1; // actions
 
   return (
     <div className="w-full overflow-x-auto rounded-lg border border-gray-200 relative">
@@ -220,12 +322,12 @@ const LeadsTable = ({
                   <span
                     data-indeterminate={someOnPageChecked ? "true" : undefined}
                     className="relative inline-flex h-4 w-4 items-center justify-center rounded border border-gray-300 bg-white shadow-sm
-               transition-colors duration-200 ease-in-out
-               peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300
-               peer-checked:bg-indigo-500 peer-checked:border-indigo-500
-               after:absolute after:h-0.5 after:w-2 after:rounded-sm after:bg-white after:opacity-0
-               after:left-1/2 after:top-1/2 after:-translate-x-1/2 after:-translate-y-1/2
-               data-[indeterminate=true]:after:opacity-100"
+                      transition-colors duration-200 ease-in-out
+                      peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300
+                      peer-checked:bg-indigo-500 peer-checked:border-indigo-500
+                      after:absolute after:h-0.5 after:w-2 after:rounded-sm after:bg-white after:opacity-0
+                      after:left-1/2 after:top-1/2 after:-translate-x-1/2 after:-translate-y-1/2
+                      data-[indeterminate=true]:after:opacity-100"
                   >
                     <svg
                       className="h-3 w-3 text-white opacity-0 pointer-events-none transition-opacity duration-200 ease-in-out peer-checked:opacity-100"
@@ -246,10 +348,12 @@ const LeadsTable = ({
             <th className={`px-3 py-2 text-left font-semibold ${W_LEAD}`}>Lead</th>
             <th className={`px-3 py-2 text-left font-semibold ${W_COMPANY}`}>Company</th>
             <th className={`px-3 py-2 text-left font-semibold hidden md:table-cell ${W_PHONE}`}>Phone</th>
-            <th className="px-3 py-2 text-left font-semibold hidden sm:table-cell">Country</th>
+            {/* Country removed */}
             <th className="px-3 py-2 text-left font-semibold">Status</th>
             <th className="px-3 py-2 text-left font-semibold hidden md:table-cell">Source</th>
-            <th className={`px-3 py-2 text-left font-semibold ${W_ASSIGNEE}`}>Assignee</th>
+            <th className={`px-3 py-2 text-left font-semibold ${W_DATE}`}>Created</th>
+            <th className={`px-3 py-2 text-left font-semibold ${W_DATE}`}>Last Contacted</th>
+            {showAssigneeCol && <th className={`px-3 py-2 text-left font-semibold ${W_ASSIGNEE}`}>Assignee</th>}
             <th className="px-3 py-2 text-left font-semibold">Actions</th>
           </tr>
         </thead>
@@ -257,7 +361,7 @@ const LeadsTable = ({
         <tbody>
           {leads.length === 0 ? (
             <tr>
-              <td colSpan={showSelection ? 9 : 8} className="px-3 py-6 text-center text-gray-500">
+              <td colSpan={colsCount} className="px-3 py-6 text-center text-gray-500">
                 No leads found.
               </td>
             </tr>
@@ -270,12 +374,13 @@ const LeadsTable = ({
               const sourceValue = row.LeadSource?.value || "";
               const phone = row.phone && row.phone.length > 4 ? row.phone : "N/A";
               const assigneeName = getCurrentAssigneeName(row);
-
-              const countryRaw = row.country_code ?? row.country;
-              const countryCode = toCountryCode(countryRaw);
+              const created = formatDateTime(row.created_at);
+              const lastContacted = formatDateTime(row.updated_at);
 
               const reassignable = canReassign(row);
               const isChecked = selectedIds.includes(row.id);
+
+              const canEditThisStatus = canEditStatus(row) && Array.isArray(statuses) && statuses.length > 0;
 
               return (
                 <tr key={row.id} className="border-t border-gray-100 hover:bg-gray-50/70">
@@ -292,9 +397,9 @@ const LeadsTable = ({
                         />
                         <span
                           className="relative inline-flex h-4 w-4 items-center justify-center rounded border border-gray-300 bg-white shadow-sm
-               transition-colors duration-200 ease-in-out
-               peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300
-               peer-checked:bg-indigo-500 peer-checked:border-indigo-500"
+                            transition-colors duration-200 ease-in-out
+                            peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300
+                            peer-checked:bg-indigo-500 peer-checked:border-indigo-500"
                         >
                           <svg
                             className="h-3 w-3 text-white opacity-0 pointer-events-none transition-opacity duration-200 ease-in-out peer-checked:opacity-100"
@@ -334,21 +439,29 @@ const LeadsTable = ({
                     </div>
                   </td>
 
-                  {/* Country (2-letter code) */}
-                  <td className="px-3 py-2 hidden sm:table-cell align-top">
-                    <span
-                      className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-xs font-mono ${
-                        countryCode === "-" ? "text-gray-500" : "bg-gray-100 text-gray-800 border border-gray-200"
-                      }`}
-                      title={countryCode}
-                    >
-                      {countryCode}
-                    </span>
-                  </td>
-
-                  {/* Status */}
+                  {/* Status (inline editable dropdown, NO search in portal) */}
                   <td className="px-3 py-2 align-top">
-                    <Badge text={statusLabel} color={getStatusColor(statusValue)} size="sm" rounded="rounded" />
+                    {canEditThisStatus ? (
+                      <Tooltip content="Change status" placement="top" theme="light">
+                        <button
+                          data-status-trigger={row.id}
+                          onClick={(e) => toggleStatusDropdown(row, e)}
+                          className="status-trigger inline-flex items-center gap-1 text-gray-800 hover:text-black"
+                          aria-label="Change status"
+                        >
+                          <Badge text={statusLabel} color={getStatusColor(statusValue)} size="sm" rounded="rounded" />
+                          <IconComponent
+                            icon="mdi:chevron-down"
+                            width={18}
+                            className={`shrink-0 transition-transform duration-200 ${
+                              statusDropdownOpen === row.id ? "rotate-180" : ""
+                            }`}
+                          />
+                        </button>
+                      </Tooltip>
+                    ) : (
+                      <Badge text={statusLabel} color={getStatusColor(statusValue)} size="sm" rounded="rounded" />
+                    )}
                   </td>
 
                   {/* Source */}
@@ -356,32 +469,44 @@ const LeadsTable = ({
                     <Badge text={sourceLabel} color={getSourceColor(sourceValue)} size="sm" rounded="rounded" />
                   </td>
 
-                  {/* Assignee */}
-                  <td className={`px-3 py-2 align-top ${W_ASSIGNEE}`}>
-                    {reassignable ? (
-                      <Tooltip content="Change assignee" placement="top" theme="light">
-                        <button
-                          data-assignee-trigger={row.id}
-                          onClick={(e) => toggleDropdown(row, e)}
-                          className="flex items-center gap-1 text-gray-800 assignee-trigger hover:text-black overflow-hidden"
-                          aria-label="Change assignee"
-                        >
-                          <span className="truncate">{assigneeName}</span>
-                          <IconComponent
-                            icon="mdi:chevron-down"
-                            width={18}
-                            className={`shrink-0 transition-transform duration-200 ${
-                              dropdownOpen === row.id ? "rotate-180" : ""
-                            }`}
-                          />
-                        </button>
-                      </Tooltip>
-                    ) : (
-                      <div className="flex items-center gap-1 text-gray-500 overflow-hidden">
-                        <span className="truncate">{assigneeName}</span>
-                      </div>
-                    )}
+                  {/* Created */}
+                  <td className={`px-3 py-2 align-top ${W_DATE}`}>
+                    <span className="text-gray-800">{created}</span>
                   </td>
+
+                  {/* Last Contacted (updated_at) */}
+                  <td className={`px-3 py-2 align-top ${W_DATE}`}>
+                    <span className="text-gray-800">{lastContacted}</span>
+                  </td>
+
+                  {/* Assignee (hidden for sales agents) */}
+                  {showAssigneeCol && (
+                    <td className={`px-3 py-2 align-top ${W_ASSIGNEE}`}>
+                      {reassignable ? (
+                        <Tooltip content="Change assignee" placement="top" theme="light">
+                          <button
+                            data-assignee-trigger={row.id}
+                            onClick={(e) => toggleAssigneeDropdown(row, e)}
+                            className="flex items-center gap-1 text-gray-800 assignee-trigger hover:text-black overflow-hidden"
+                            aria-label="Change assignee"
+                          >
+                            <span className="truncate">{assigneeName}</span>
+                            <IconComponent
+                              icon="mdi:chevron-down"
+                              width={18}
+                              className={`shrink-0 transition-transform duration-200 ${
+                                dropdownOpen === row.id ? "rotate-180" : ""
+                              }`}
+                            />
+                          </button>
+                        </Tooltip>
+                      ) : (
+                        <div className="flex items-center gap-1 text-gray-500 overflow-hidden">
+                          <span className="truncate">{assigneeName}</span>
+                        </div>
+                      )}
+                    </td>
+                  )}
 
                   {/* Actions */}
                   <td className="px-3 py-2 align-top">
@@ -416,82 +541,136 @@ const LeadsTable = ({
         </tbody>
       </table>
 
-      {/* Assignee Dropdown (Portal) */}
-      {ReactDOM.createPortal(
-        <div
-          className={`assignee-portal-dropdown fixed bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] transform transition-all duration-200 font-dm-sans ${
-            dropdownOpen
-              ? "opacity-100 scale-100 visible pointer-events-auto"
-              : "opacity-0 scale-95 invisible pointer-events-none"
-          } ${dropdownPos.placeAbove ? "origin-bottom -translate-y-full" : "origin-top"}`}
-          style={{ top: dropdownPos.top, left: dropdownPos.left, width: `${MENU_WIDTH}px` }}
-          role="listbox"
-          aria-hidden={!dropdownOpen}
-        >
-          {/* Search */}
-          <div className="p-2 border-b border-gray-200 sticky top-0 bg-white">
-            <div className="relative">
-              <input
-                type="text"
-                value={assigneeQuery}
-                onChange={(e) => setAssigneeQuery(e.target.value)}
-                placeholder="Search assignee…"
-                className="w-full rounded-md border border-gray-300 px-8 py-1.5 text-xs text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                autoFocus
-              />
-              <IconComponent
-                icon="mdi:magnify"
-                width={16}
-                className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500"
-              />
-              {assigneeQuery && (
-                <button
-                  onClick={() => setAssigneeQuery("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                  aria-label="Clear assignee search"
-                >
-                  <IconComponent icon="mdi:close-circle" width={16} />
-                </button>
+      {/* =========================
+          Status Dropdown (Portal) — NO search
+          ========================= */}
+      {statusDropdownOpen &&
+        ReactDOM.createPortal(
+          <div
+            className={`status-portal-dropdown fixed bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] transform transition-all duration-200 font-dm-sans ${
+              statusDropdownOpen
+                ? "opacity-100 scale-100 visible pointer-events-auto"
+                : "opacity-0 scale-95 invisible pointer-events-none"
+            } ${statusDropdownPos.placeAbove ? "origin-bottom -translate-y-full" : "origin-top"}`}
+            style={{ top: statusDropdownPos.top, left: statusDropdownPos.left, width: `${MENU_WIDTH}px` }}
+            role="listbox"
+            aria-hidden={!statusDropdownOpen}
+          >
+            <div className="app-scrollbar overflow-y-auto" style={{ maxHeight: `${statusDropdownPos.maxHeight}px` }}>
+              {Array.isArray(statuses) && statuses.length > 0 ? (
+                statuses.map((raw) => {
+                  const s = normStatus(raw);
+                  const isCurrent = sameStatusById(openLeadStatus, s);
+
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={async () => {
+                        const lead = openLeadStatus;
+                        closeStatusDropdown();
+                        if (lead && onStatusUpdate) {
+                          // Pass normalized shape so SalesLeads handler receives an 'id'
+                          await onStatusUpdate(lead, { id: s.id, label: s.label, value: s.value });
+                        }
+                      }}
+                      className={`px-3 py-2 text-xs cursor-pointer hover:bg-indigo-50 ${
+                        isCurrent ? "bg-indigo-50 font-medium" : "text-gray-800"
+                      }`}
+                      role="option"
+                      aria-selected={isCurrent}
+                      title={s.label}
+                    >
+                      <span className="truncate block">{s.label}</span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="px-3 py-2 text-gray-500 text-xs">No statuses found</div>
               )}
             </div>
-          </div>
+          </div>,
+          document.body
+        )}
 
-          <div className="app-scrollbar overflow-y-auto" style={{ maxHeight: `${dropdownPos.maxHeight - 44}px` }}>
-            {(() => {
-              const list = (filteredTargets || []).map((m) => {
-                const currentAssigneeId = openLead ? getCurrentAssignee(openLead)?.id ?? null : null;
-                const isCurrent = m.id === currentAssigneeId;
-                return (
-                  <div
-                    key={m.id}
-                    onClick={() => {
-                      const lead = openLead;
-                      closeDropdown();
-                      if (lead) onAssignOptionClick(lead, m);
-                    }}
-                    className={`px-3 py-2 text-xs cursor-pointer flex items-start justify-between hover:bg-indigo-50 ${
-                      isCurrent ? "bg-indigo-50" : ""
-                    }`}
-                    role="option"
-                    aria-selected={isCurrent}
+      {/* =========================
+          Assignee Dropdown (Portal) — WITH search
+          ========================= */}
+      {showAssigneeCol &&
+        ReactDOM.createPortal(
+          <div
+            className={`assignee-portal-dropdown fixed bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] transform transition-all duration-200 font-dm-sans ${
+              dropdownOpen
+                ? "opacity-100 scale-100 visible pointer-events-auto"
+                : "opacity-0 scale-95 invisible pointer-events-none"
+            } ${dropdownPos.placeAbove ? "origin-bottom -translate-y-full" : "origin-top"}`}
+            style={{ top: dropdownPos.top, left: dropdownPos.left, width: `${MENU_WIDTH}px` }}
+            role="listbox"
+            aria-hidden={!dropdownOpen}
+          >
+            {/* Search */}
+            <div className="p-2 border-b border-gray-200 sticky top-0 bg-white">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={assigneeQuery}
+                  onChange={(e) => setAssigneeQuery(e.target.value)}
+                  placeholder="Search assignee…"
+                  className="w-full rounded-md border border-gray-300 px-8 py-1.5 text-xs text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  autoFocus
+                />
+                <IconComponent
+                  icon="mdi:magnify"
+                  width={16}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500"
+                />
+                {assigneeQuery && (
+                  <button
+                    onClick={() => setAssigneeQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    aria-label="Clear assignee search"
                   >
-                    <div className="min-w-0">
-                      <span className="font-medium text-black block truncate">{m.full_name}</span>
-                      <div className="text-[11px] text-gray-500 truncate">{m.email}</div>
-                    </div>
-                    {isCurrent && (
-                      <IconComponent icon="mdi:check-circle" width={16} className="text-indigo-600 mt-0.5 shrink-0" />
-                    )}
-                  </div>
-                );
-              });
+                    <IconComponent icon="mdi:close-circle" width={16} />
+                  </button>
+                )}
+              </div>
+            </div>
 
-              return list.length ? list : <div className="px-3 py-2 text-gray-500 text-xs">No users found</div>;
-            })()}
-          </div>
-        </div>,
-        document.body
-      )}
+            <div className="app-scrollbar overflow-y-auto" style={{ maxHeight: `${dropdownPos.maxHeight - 44}px` }}>
+              {(() => {
+                const list = (filteredAssigneeTargets || []).map((m) => {
+                  const currentAssigneeId = openLead ? getCurrentAssignee(openLead)?.id ?? null : null;
+                  const isCurrent = m.id === currentAssigneeId;
+                  return (
+                    <div
+                      key={m.id}
+                      onClick={() => {
+                        const lead = openLead;
+                        closeAssigneeDropdown();
+                        if (lead) onAssignOptionClick(lead, m);
+                      }}
+                      className={`px-3 py-2 text-xs cursor-pointer flex items-start justify-between hover:bg-indigo-50 ${
+                        isCurrent ? "bg-indigo-50" : ""
+                      }`}
+                      role="option"
+                      aria-selected={isCurrent}
+                    >
+                      <div className="min-w-0">
+                        <span className="font-medium text-black block truncate">{m.full_name}</span>
+                        <div className="text-[11px] text-gray-500 truncate">{m.email}</div>
+                      </div>
+                      {isCurrent && (
+                        <IconComponent icon="mdi:check-circle" width={16} className="text-indigo-600 mt-0.5 shrink-0" />
+                      )}
+                    </div>
+                  );
+                });
+
+                return list.length ? list : <div className="px-3 py-2 text-gray-500 text-xs">No users found</div>;
+              })()}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

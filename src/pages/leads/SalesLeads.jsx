@@ -240,8 +240,7 @@ const SalesLeads = () => {
     fetchProfile();
   }, [fetchStatuses, fetchSources, fetchMyManagers, fetchProfile]);
 
-  // Initial + subsequent fetches — runs once immediately with hydrated values,
-  // and then whenever dependencies change (including page).
+  // Initial + subsequent fetches
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
@@ -310,6 +309,37 @@ const SalesLeads = () => {
       setIsAssignModalOpen(false);
       setLeadToAssign(null);
       setSelectedAssignee(null);
+    }
+  };
+
+  // NEW: Inline Status Update handler (used by table)
+  const handleInlineStatusUpdate = async (lead, statusOption) => {
+    if (!lead || !statusOption?.id) return;
+    // Optimistic UI update
+    const prev = leads;
+    const now = new Date().toISOString();
+    setLeads((ls) =>
+      ls.map((l) =>
+        l.id === lead.id
+          ? {
+              ...l,
+              status_id: statusOption.id,
+              LeadStatus: { id: statusOption.id, value: statusOption.value, label: statusOption.label },
+              updated_at: now,
+            }
+          : l
+      )
+    );
+
+    try {
+      await API.private.updateLead(lead.id, { status_id: statusOption.id });
+      // Optionally refetch to be 100% fresh
+      await fetchLeads();
+      Notification.success("Status updated");
+    } catch (err) {
+      // Revert on error
+      setLeads(prev);
+      Notification.error(err.response?.data?.error || "Failed to update status");
     }
   };
 
@@ -437,6 +467,8 @@ const SalesLeads = () => {
                 onAssignOptionClick={handleAssignOptionClick}
                 mode="sales"
                 selfId={me?.id || null}
+                statuses={statuses} // keep { id, value, label }
+                onStatusUpdate={handleInlineStatusUpdate} // <-- pass the correct prop
               />
               <Pagination
                 currentPage={page}
