@@ -33,7 +33,7 @@ const useDebouncedValue = (value, delay = 300) => {
 const DEFAULT_FILTERS = {
   search: "",
   statusId: "",
-  sourceId: "",
+  sourceIds: [], // ← multi-select now
   orderBy: "",
   orderDir: "ASC",
   assignedFrom: "",
@@ -47,7 +47,8 @@ const getInitialFilters = () => {
   const stored = token.getPersistedLeadsFilters(DEFAULT_FILTERS) || {};
   return {
     statusId: stored.statusId ?? DEFAULT_FILTERS.statusId,
-    sourceId: stored.sourceId ?? DEFAULT_FILTERS.sourceId,
+    // ensure array for sources
+    sourceIds: Array.isArray(stored.sourceIds) ? stored.sourceIds : DEFAULT_FILTERS.sourceIds,
     orderBy: stored.orderBy ?? DEFAULT_FILTERS.orderBy,
     orderDir: stored.orderDir ?? DEFAULT_FILTERS.orderDir,
     assignedFrom: stored.assignedFrom ?? DEFAULT_FILTERS.assignedFrom,
@@ -135,7 +136,7 @@ const SalesLeads = () => {
 
   // Filters (search not persisted)
   const [statusId, setStatusId] = useState(() => initial.statusId);
-  const [sourceId, setSourceId] = useState(() => initial.sourceId);
+  const [sourceIds, setSourceIds] = useState(() => initial.sourceIds); // ← array
   const [orderBy, setOrderBy] = useState(() => initial.orderBy);
   const [orderDir, setOrderDir] = useState(() => initial.orderDir);
   const [search, setSearch] = useState(() => initial.search);
@@ -164,7 +165,8 @@ const SalesLeads = () => {
         page: page ?? 1,
         limit,
         status_id: statusId || undefined,
-        source_id: sourceId || undefined,
+        // serialize array to CSV for API
+        source_ids: Array.isArray(sourceIds) && sourceIds.length ? sourceIds.join(",") : undefined,
         orderBy: orderBy || undefined,
         orderDir: orderDir || undefined,
         search: debouncedSearch || undefined,
@@ -184,7 +186,7 @@ const SalesLeads = () => {
     } finally {
       if (fetchId === fetchGuard.current) setLoading(false);
     }
-  }, [page, limit, statusId, sourceId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo]);
+  }, [page, limit, statusId, sourceIds, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo]);
 
   const fetchStatuses = useCallback(async () => {
     try {
@@ -248,13 +250,13 @@ const SalesLeads = () => {
   // Reset page to 1 when any filter/sort/limit/search/date range changes
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
-  }, [statusId, sourceId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo, limit]);
+  }, [statusId, sourceIds, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo, limit]);
 
   // Persist everything EXCEPT search
   useEffect(() => {
     token.setPersistedLeadsFilters({
       statusId,
-      sourceId,
+      sourceIds, // ← persist array
       orderBy,
       orderDir,
       assignedFrom,
@@ -262,7 +264,7 @@ const SalesLeads = () => {
       limit,
       page,
     });
-  }, [statusId, sourceId, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
+  }, [statusId, sourceIds, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
 
   /** ============================
    *  Handlers
@@ -386,7 +388,7 @@ const SalesLeads = () => {
   const handleToolbarChange = (partial) => {
     if ("search" in partial) setSearch(partial.search);
     if ("statusId" in partial) setStatusId(partial.statusId);
-    if ("sourceId" in partial) setSourceId(partial.sourceId);
+    if ("sourceIds" in partial) setSourceIds(Array.isArray(partial.sourceIds) ? partial.sourceIds : []); // ← array
     if ("orderBy" in partial) setOrderBy(partial.orderBy);
     if ("orderDir" in partial) setOrderDir(partial.orderDir);
     if ("assignedFrom" in partial) setAssignedFrom(partial.assignedFrom);
@@ -395,7 +397,7 @@ const SalesLeads = () => {
 
   const resetAllFilters = () => {
     setStatusId(DEFAULT_FILTERS.statusId);
-    setSourceId(DEFAULT_FILTERS.sourceId);
+    setSourceIds(DEFAULT_FILTERS.sourceIds); // ← []
     setOrderBy(DEFAULT_FILTERS.orderBy);
     setOrderDir(DEFAULT_FILTERS.orderDir);
     setSearch(DEFAULT_FILTERS.search); // not persisted
@@ -407,7 +409,7 @@ const SalesLeads = () => {
     // persist everything EXCEPT search
     token.setPersistedLeadsFilters({
       statusId: DEFAULT_FILTERS.statusId,
-      sourceId: DEFAULT_FILTERS.sourceId,
+      sourceIds: DEFAULT_FILTERS.sourceIds,
       orderBy: DEFAULT_FILTERS.orderBy,
       orderDir: DEFAULT_FILTERS.orderDir,
       assignedFrom: DEFAULT_FILTERS.assignedFrom,
@@ -440,7 +442,7 @@ const SalesLeads = () => {
           values={{
             search,
             statusId,
-            sourceId,
+            sourceIds, // ← array to Toolbar
             orderBy,
             orderDir,
             limit,
