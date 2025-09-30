@@ -1,6 +1,8 @@
+// src/pages/admin/components/LeadsFiltersToolbar.jsx
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import Select from "@/components/form/Select";
 import TextInput from "@/components/form/TextInput"; // keep for Search
+import MultiSelect from "@/components/form/MultiSelect";
 import IconComponent from "@/components/ui/Icon";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
@@ -102,7 +104,7 @@ const LeadsFiltersToolbar = ({
   values = {
     search: "",
     statusId: "",
-    sourceId: "",
+    sourceIds: [], // <-- multi-source
     assigneeId: "",
     orderBy: "",
     orderDir: "ASC",
@@ -115,29 +117,55 @@ const LeadsFiltersToolbar = ({
   onChange,
   onResetAll,
 }) => {
-  const { search, statusId, sourceId, assigneeId, orderBy, orderDir, limit, assignedFrom, assignedTo } = values;
+  const { search, statusId, sourceIds = [], assigneeId, orderBy, orderDir, limit, assignedFrom, assignedTo } = values;
 
   const getLabel = (arr, val) => arr.find((x) => String(x.value) === String(val))?.label;
 
+  // If there are many selected sources, collapse to a single summary chip
+  const MAX_SOURCE_CHIPS = 4;
+
   const chips = useMemo(() => {
     const items = [];
+
     if (statusId) items.push({ key: "status", label: `Status: ${getLabel(statuses, statusId) || statusId}` });
-    if (sourceId) items.push({ key: "source", label: `Source: ${getLabel(sources, sourceId) || sourceId}` });
+
+    if (Array.isArray(sourceIds) && sourceIds.length) {
+      if (sourceIds.length <= MAX_SOURCE_CHIPS) {
+        // granular chips (each removable)
+        sourceIds.forEach((sid) => {
+          items.push({
+            key: `source:${sid}`,
+            label: `Source: ${getLabel(sources, sid) || sid}`,
+          });
+        });
+      } else {
+        // one summary chip; remove-all behavior
+        items.push({
+          key: "sources:all",
+          label: `Sources: ${sourceIds.length} selected`,
+        });
+      }
+    }
+
     if (showAssignee && assigneeId)
       items.push({ key: "assignee", label: `Assignee: ${getLabel(assigneeOptions, assigneeId) || assigneeId}` });
+
     if (orderBy) items.push({ key: "orderBy", label: `Sort: ${getLabel(sortFields, orderBy) || orderBy}` });
     if (orderDir !== "ASC") items.push({ key: "orderDir", label: `Dir: ${orderDir}` });
+
     if (assignedFrom || assignedTo) {
       const from = assignedFrom || "…";
       const to = assignedTo || "…";
       items.push({ key: "assignedRange", label: `Assigned: ${from} → ${to}` });
     }
+
     if (search) items.push({ key: "search", label: `Search: “${search}”` });
+
     return items;
   }, [
     search,
     statusId,
-    sourceId,
+    sourceIds,
     assigneeId,
     orderBy,
     orderDir,
@@ -154,7 +182,17 @@ const LeadsFiltersToolbar = ({
 
   const clearChip = (key) => {
     if (key === "status") onChange({ statusId: "" });
-    if (key === "source") onChange({ sourceId: "" });
+
+    if (key.startsWith("source:")) {
+      const id = key.split(":")[1];
+      const next = (sourceIds || []).filter((s) => String(s) !== String(id));
+      onChange({ sourceIds: next });
+    }
+
+    if (key === "sources:all") {
+      onChange({ sourceIds: [] });
+    }
+
     if (key === "assignee") onChange({ assigneeId: "" });
     if (key === "orderBy") onChange({ orderBy: "" });
     if (key === "orderDir") onChange({ orderDir: "ASC" });
@@ -218,11 +256,12 @@ const LeadsFiltersToolbar = ({
           placeholder="All statuses"
         />
 
-        <Select
-          label="Source"
-          value={sourceId}
-          onChange={(v) => onChange({ sourceId: v })}
-          options={[{ value: "", label: "All" }, ...sources]}
+        {/* Multi-source filter */}
+        <MultiSelect
+          label="Sources"
+          value={Array.isArray(sourceIds) ? sourceIds : []}
+          onChange={(vals) => onChange({ sourceIds: vals })}
+          options={sources}
           placeholder="All sources"
         />
 

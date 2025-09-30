@@ -17,7 +17,9 @@ import Select from "@/components/form/Select";
 import GrayButton from "@/components/ui/GrayButton";
 import token from "@/lib/utilities";
 
-/** Simple debounce hook */
+/** ============================
+ *  Simple debounce hook
+ *  ============================ */
 const useDebouncedValue = (value, delay = 300) => {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -31,7 +33,7 @@ const useDebouncedValue = (value, delay = 300) => {
 const DEFAULT_FILTERS = {
   search: "",
   statusId: "",
-  sourceId: "",
+  sourceIds: [], // <- multi-source
   assigneeId: "",
   orderBy: "",
   orderDir: "ASC",
@@ -46,7 +48,7 @@ const getInitialFilters = () => {
   const stored = token.getPersistedLeadsFilters(DEFAULT_FILTERS) || {};
   return {
     statusId: stored.statusId ?? DEFAULT_FILTERS.statusId,
-    sourceId: stored.sourceId ?? DEFAULT_FILTERS.sourceId,
+    sourceIds: Array.isArray(stored.sourceIds) ? stored.sourceIds : DEFAULT_FILTERS.sourceIds,
     assigneeId: stored.assigneeId ?? DEFAULT_FILTERS.assigneeId,
     orderBy: stored.orderBy ?? DEFAULT_FILTERS.orderBy,
     orderDir: stored.orderDir ?? DEFAULT_FILTERS.orderDir,
@@ -98,7 +100,7 @@ const AdminLeads = () => {
 
   // Filters / Sorting / Search
   const [statusId, setStatusId] = useState(() => initial.statusId);
-  const [sourceId, setSourceId] = useState(() => initial.sourceId);
+  const [sourceIds, setSourceIds] = useState(() => initial.sourceIds); // <- array
   const [assigneeId, setAssigneeId] = useState(() => initial.assigneeId);
   const [orderBy, setOrderBy] = useState(() => initial.orderBy);
   const [orderDir, setOrderDir] = useState(() => initial.orderDir);
@@ -137,7 +139,8 @@ const AdminLeads = () => {
         page: page ?? 1,
         limit,
         status_id: statusId || undefined,
-        source_id: sourceId || undefined,
+        // >>> serialize array to comma-separated string for the API <<<
+        source_ids: Array.isArray(sourceIds) && sourceIds.length ? sourceIds.join(",") : undefined,
         assignee_id: isAdminOrManager && assigneeId ? assigneeId : undefined,
         orderBy: orderBy || undefined,
         orderDir: orderDir || undefined,
@@ -163,7 +166,7 @@ const AdminLeads = () => {
     page,
     limit,
     statusId,
-    sourceId,
+    sourceIds,
     assigneeId,
     isAdminOrManager,
     orderBy,
@@ -252,13 +255,13 @@ const AdminLeads = () => {
   // When any filter (or limit or search) changes, jump to page 1
   useEffect(() => {
     setPage((prev) => (prev === 1 ? prev : 1));
-  }, [statusId, sourceId, assigneeId, orderBy, orderDir, debouncedSearch, limit, assignedFrom, assignedTo]);
+  }, [statusId, sourceIds, assigneeId, orderBy, orderDir, debouncedSearch, limit, assignedFrom, assignedTo]);
 
   // Persist everything EXCEPT search
   useEffect(() => {
     token.setPersistedLeadsFilters({
       statusId,
-      sourceId,
+      sourceIds,
       assigneeId,
       orderBy,
       orderDir,
@@ -267,7 +270,7 @@ const AdminLeads = () => {
       limit,
       page,
     });
-  }, [statusId, sourceId, assigneeId, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
+  }, [statusId, sourceIds, assigneeId, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
 
   // === Handlers ===
   const handleSubmit = async (data) => {
@@ -426,7 +429,7 @@ const AdminLeads = () => {
   const handleToolbarChange = (partial) => {
     if (Object.prototype.hasOwnProperty.call(partial, "search")) setSearch(partial.search);
     if (Object.prototype.hasOwnProperty.call(partial, "statusId")) setStatusId(partial.statusId);
-    if (Object.prototype.hasOwnProperty.call(partial, "sourceId")) setSourceId(partial.sourceId);
+    if (Object.prototype.hasOwnProperty.call(partial, "sourceIds")) setSourceIds(partial.sourceIds); // <- array
     if (Object.prototype.hasOwnProperty.call(partial, "assigneeId")) setAssigneeId(partial.assigneeId);
     if (Object.prototype.hasOwnProperty.call(partial, "orderBy")) setOrderBy(partial.orderBy);
     if (Object.prototype.hasOwnProperty.call(partial, "orderDir")) setOrderDir(partial.orderDir);
@@ -436,7 +439,7 @@ const AdminLeads = () => {
 
   const resetAllFilters = () => {
     setStatusId(DEFAULT_FILTERS.statusId);
-    setSourceId(DEFAULT_FILTERS.sourceId);
+    setSourceIds(DEFAULT_FILTERS.sourceIds); // []
     setAssigneeId(DEFAULT_FILTERS.assigneeId);
     setOrderBy(DEFAULT_FILTERS.orderBy);
     setOrderDir(DEFAULT_FILTERS.orderDir);
@@ -449,7 +452,7 @@ const AdminLeads = () => {
     // Persist everything EXCEPT search
     token.setPersistedLeadsFilters({
       statusId: DEFAULT_FILTERS.statusId,
-      sourceId: DEFAULT_FILTERS.sourceId,
+      sourceIds: DEFAULT_FILTERS.sourceIds,
       assigneeId: DEFAULT_FILTERS.assigneeId,
       orderBy: DEFAULT_FILTERS.orderBy,
       orderDir: DEFAULT_FILTERS.orderDir,
@@ -521,7 +524,7 @@ const AdminLeads = () => {
           values={{
             search,
             statusId,
-            sourceId,
+            sourceIds,
             assigneeId,
             orderBy,
             orderDir,
