@@ -3,29 +3,40 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/Icon";
 import token from "@/lib/utilities";
 
-const SidebarMenu = ({ menuItems }) => {
+const SidebarMenu = ({ menuItems, isExpanded = false }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    token.logout();
+    token.logout?.();
     navigate("/login");
   };
 
   return (
-    <nav className="mt-6 flex-1 px-3 pb-4 space-y-1 overflow-y-auto">
+    <nav className="mt-2 flex-1 px-2 pb-4 overflow-y-auto">
       {menuItems.map((item, idx) => {
-        const isActive = location.pathname === item.path;
+        const isActive = item.path && location.pathname === item.path;
+
+        const baseClasses = "flex items-center w-full rounded-lg transition focus:outline-none focus:ring";
+        const expandedClasses = isExpanded
+          ? `p-2 mb-1 ${isActive ? "bg-accent text-white font-semibold shadow" : "text-gray-700 hover:bg-accent/10"}`
+          : `justify-center p-2 mb-1 ${isActive ? "bg-accent text-white shadow" : "text-gray-700 hover:bg-accent/10"}`;
 
         if (item.action === "logout") {
           return (
             <button
               key={idx}
               onClick={handleLogout}
-              className="flex items-center w-full p-2 rounded-lg text-gray-700 hover:bg-accent/10 transition"
+              className={`${baseClasses} ${expandedClasses}`}
+              aria-label={!isExpanded ? item.label : undefined}
+              title={!isExpanded ? item.label : undefined}
             >
-              <Icon icon={item.icon} width={20} className="mr-3 text-accent" />
-              <span>{item.label}</span>
+              <Icon
+                icon={item.icon}
+                width={20}
+                className={`${isExpanded ? "text-accent" : isActive ? "" : "text-accent"}`}
+              />
+              {isExpanded ? <span className="ml-3">{item.label}</span> : <span className="sr-only">{item.label}</span>}
             </button>
           );
         }
@@ -34,12 +45,17 @@ const SidebarMenu = ({ menuItems }) => {
           <Link
             key={idx}
             to={item.path}
-            className={`flex items-center p-2 rounded-lg transition ${
-              isActive ? "bg-accent text-white font-semibold shadow" : "text-gray-700 hover:bg-accent/10"
-            }`}
+            className={`${baseClasses} ${expandedClasses}`}
+            aria-current={isActive ? "page" : undefined}
+            aria-label={!isExpanded ? item.label : undefined}
+            title={!isExpanded ? item.label : undefined}
           >
-            <Icon icon={item.icon} width={20} className={`mr-3 ${isActive ? "text-white" : "text-accent"}`} />
-            <span>{item.label}</span>
+            <Icon
+              icon={item.icon}
+              width={20}
+              className={`${isExpanded ? "text-accent" : isActive ? "" : "text-accent"}`}
+            />
+            {isExpanded ? <span className="ml-3">{item.label}</span> : <span className="sr-only">{item.label}</span>}
           </Link>
         );
       })}
