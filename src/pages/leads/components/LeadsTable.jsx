@@ -277,7 +277,7 @@ const LeadsTable = ({
   // Fixed widths (px)
   const W_SELECT = "w-[46px]";
   const W_LEAD = "w-[175px]";
-  const W_COMPANY = "w-[175px]";
+  const W_COMPANY = "w-[120px]";
   const W_PHONE = "w-[100px]";
   const W_ASSIGNEE = "w-[175px]";
   const W_DATE = "w-[170px]";
