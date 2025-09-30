@@ -22,6 +22,13 @@ const SidebarMenu = ({ menuItems, isExpanded = false }) => {
           ? `p-2 mb-1 ${isActive ? "bg-accent text-white font-semibold shadow" : "text-gray-700 hover:bg-accent/10"}`
           : `justify-center p-2 mb-1 ${isActive ? "bg-accent text-white shadow" : "text-gray-700 hover:bg-accent/10"}`;
 
+        // Decide icon color based on state
+        const iconColorClass = (() => {
+          if (isExpanded && isActive) return "text-white"; // expanded + active
+          if (isExpanded) return "text-accent"; // expanded but not active
+          return isActive ? "" : "text-accent"; // collapsed active vs inactive
+        })();
+
         if (item.action === "logout") {
           return (
             <button
@@ -31,11 +38,7 @@ const SidebarMenu = ({ menuItems, isExpanded = false }) => {
               aria-label={!isExpanded ? item.label : undefined}
               title={!isExpanded ? item.label : undefined}
             >
-              <Icon
-                icon={item.icon}
-                width={20}
-                className={`${isExpanded ? "text-accent" : isActive ? "" : "text-accent"}`}
-              />
+              <Icon icon={item.icon} width={20} className={iconColorClass} />
               {isExpanded ? <span className="ml-3">{item.label}</span> : <span className="sr-only">{item.label}</span>}
             </button>
           );
@@ -50,11 +53,7 @@ const SidebarMenu = ({ menuItems, isExpanded = false }) => {
             aria-label={!isExpanded ? item.label : undefined}
             title={!isExpanded ? item.label : undefined}
           >
-            <Icon
-              icon={item.icon}
-              width={20}
-              className={`${isExpanded ? "text-accent" : isActive ? "" : "text-accent"}`}
-            />
+            <Icon icon={item.icon} width={20} className={iconColorClass} />
             {isExpanded ? <span className="ml-3">{item.label}</span> : <span className="sr-only">{item.label}</span>}
           </Link>
         );

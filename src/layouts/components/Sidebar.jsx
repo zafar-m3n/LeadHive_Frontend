@@ -5,26 +5,27 @@ import favicon from "@/assets/favicon.png";
 import token from "@/lib/utilities";
 import useWidth from "@/hooks/useWidth";
 
-const Sidebar = ({ menuOpen, setMenuOpen }) => {
+const Sidebar = ({ menuOpen, setMenuOpen, onExpandChange }) => {
   const { width, breakpoints } = useWidth();
+  const isDesktop = width >= breakpoints.md;
 
   const user = token.getUserData?.() || {};
-  const role = user?.role?.value || "guest"; // "admin" | "manager" | "sales_rep"
-
-  // Enable hover expansion only on desktop
-  const isDesktop = width >= breakpoints.md;
+  const role = user?.role?.value || "guest";
 
   const [isHoverExpanded, setIsHoverExpanded] = useState(false);
 
   const openExpanded = useCallback(() => {
-    if (isDesktop) setIsHoverExpanded(true);
-  }, [isDesktop]);
+    if (!isDesktop) return;
+    setIsHoverExpanded(true);
+    onExpandChange?.(true);
+  }, [isDesktop, onExpandChange]);
 
   const closeExpanded = useCallback(() => {
-    if (isDesktop) setIsHoverExpanded(false);
-  }, [isDesktop]);
+    if (!isDesktop) return;
+    setIsHoverExpanded(false);
+    onExpandChange?.(false);
+  }, [isDesktop, onExpandChange]);
 
-  // Menus by role
   const adminItems = [
     { label: "Dashboard", icon: "mdi:view-dashboard-outline", path: "/admin/dashboard" },
     { label: "Manage Users", icon: "mdi:account-multiple-outline", path: "/admin/users" },
@@ -53,48 +54,35 @@ const Sidebar = ({ menuOpen, setMenuOpen }) => {
   else if (role === "sales_rep") menuItems = salesRepItems;
   else menuItems = [{ label: "Logout", icon: "mdi:logout", action: "logout" }];
 
-  // Panel transform classes (no opacity/visibility—pure translate like mobile drawer)
-  const panelTransform = isHoverExpanded ? "translate-x-0 pointer-events-auto" : "-translate-x-64 pointer-events-none";
-
   return (
     <>
-      {/* ===== Desktop (rail + sliding overlay) ===== */}
+      {/* Desktop: single fixed sidebar that expands its width on hover */}
       <div
-        className="hidden md:block md:fixed md:inset-y-0 md:left-0 md:z-50"
+        className={`
+          hidden md:flex md:fixed md:inset-y-0 md:left-0 md:z-50
+          bg-white shadow-xl border-r h-full
+          ${isHoverExpanded ? "w-64" : "w-16"}
+          transition-[width] duration-300 ease-in-out
+          flex-col
+        `}
         onMouseEnter={openExpanded}
         onMouseLeave={closeExpanded}
         onFocusCapture={openExpanded}
         onBlurCapture={closeExpanded}
-        aria-label="Primary navigation container"
+        aria-label="Primary navigation"
       >
-        {/* Collapsed rail (fixed width reserved by layout: w-16) */}
-        <div className="h-full w-16 bg-white shadow-xl border-r flex flex-col relative z-40">
-          {/* Favicon in collapsed header */}
-          <div className="flex items-center justify-center p-4 border-b">
+        <div className="shadow p-4 flex items-center">
+          {isHoverExpanded ? (
+            <img src={logo} alt="LeadHive Logo" className="h-8 w-auto object-contain" />
+          ) : (
             <img src={favicon} alt="LeadHive" className="h-8 w-8 object-contain" />
-          </div>
-          {/* Icon-only rail menu */}
-          <SidebarMenu menuItems={menuItems} isExpanded={false} />
+          )}
         </div>
 
-        {/* Sliding overlay panel (covers rail when open) */}
-        <div
-          className={`
-            absolute top-0 left-0 h-full w-64 bg-white shadow-2xl border-r z-50
-            transform transition-transform duration-300 ease-in-out
-            ${panelTransform}
-          `}
-          aria-hidden={!isHoverExpanded}
-        >
-          <div className="flex items-center gap-3 p-4 border-b">
-            {/* Full logo in expanded header */}
-            <img src={logo} alt="LeadHive Logo" className="h-8 w-auto object-contain" />
-          </div>
-          <SidebarMenu menuItems={menuItems} isExpanded />
-        </div>
+        <SidebarMenu menuItems={menuItems} isExpanded={isHoverExpanded} />
       </div>
 
-      {/* ===== Mobile drawer (unchanged) ===== */}
+      {/* Mobile drawer remains the same */}
       <div
         className={`
           md:hidden fixed top-0 bottom-0 left-0 z-50 w-64 bg-white shadow-xl
