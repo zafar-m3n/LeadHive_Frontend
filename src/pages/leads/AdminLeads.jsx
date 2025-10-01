@@ -252,11 +252,6 @@ const AdminLeads = () => {
     fetchLeads();
   }, [fetchLeads]);
 
-  // When any filter (or limit or search) changes, jump to page 1
-  useEffect(() => {
-    setPage((prev) => (prev === 1 ? prev : 1));
-  }, [statusId, sourceIds, assigneeId, orderBy, orderDir, debouncedSearch, limit, assignedFrom, assignedTo]);
-
   // Persist everything EXCEPT search
   useEffect(() => {
     token.setPersistedLeadsFilters({
@@ -427,14 +422,51 @@ const AdminLeads = () => {
   );
 
   const handleToolbarChange = (partial) => {
-    if (Object.prototype.hasOwnProperty.call(partial, "search")) setSearch(partial.search);
-    if (Object.prototype.hasOwnProperty.call(partial, "statusId")) setStatusId(partial.statusId);
-    if (Object.prototype.hasOwnProperty.call(partial, "sourceIds")) setSourceIds(partial.sourceIds); // <- array
-    if (Object.prototype.hasOwnProperty.call(partial, "assigneeId")) setAssigneeId(partial.assigneeId);
-    if (Object.prototype.hasOwnProperty.call(partial, "orderBy")) setOrderBy(partial.orderBy);
-    if (Object.prototype.hasOwnProperty.call(partial, "orderDir")) setOrderDir(partial.orderDir);
-    if (Object.prototype.hasOwnProperty.call(partial, "assignedFrom")) setAssignedFrom(partial.assignedFrom);
-    if (Object.prototype.hasOwnProperty.call(partial, "assignedTo")) setAssignedTo(partial.assignedTo);
+    let changed = false;
+
+    if (Object.prototype.hasOwnProperty.call(partial, "search") && partial.search !== search) {
+      setSearch(partial.search);
+      changed = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(partial, "statusId") && partial.statusId !== statusId) {
+      setStatusId(partial.statusId);
+      changed = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(partial, "sourceIds")) {
+      // compare arrays shallowly
+      const next = partial.sourceIds || [];
+      const same =
+        Array.isArray(next) &&
+        Array.isArray(sourceIds) &&
+        next.length === sourceIds.length &&
+        next.every((v, i) => v === sourceIds[i]);
+      if (!same) {
+        setSourceIds(next);
+        changed = true;
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(partial, "assigneeId") && partial.assigneeId !== assigneeId) {
+      setAssigneeId(partial.assigneeId);
+      changed = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(partial, "orderBy") && partial.orderBy !== orderBy) {
+      setOrderBy(partial.orderBy);
+      changed = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(partial, "orderDir") && partial.orderDir !== orderDir) {
+      setOrderDir(partial.orderDir);
+      changed = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(partial, "assignedFrom") && partial.assignedFrom !== assignedFrom) {
+      setAssignedFrom(partial.assignedFrom);
+      changed = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(partial, "assignedTo") && partial.assignedTo !== assignedTo) {
+      setAssignedTo(partial.assignedTo);
+      changed = true;
+    }
+
+    if (changed) setPage(1);
   };
 
   const resetAllFilters = () => {

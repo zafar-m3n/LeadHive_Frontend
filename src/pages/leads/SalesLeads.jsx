@@ -247,10 +247,10 @@ const SalesLeads = () => {
     fetchLeads();
   }, [fetchLeads]);
 
-  // Reset page to 1 when any filter/sort/limit/search/date range changes
-  useEffect(() => {
-    setPage((prev) => (prev === 1 ? prev : 1));
-  }, [statusId, sourceIds, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo, limit]);
+  // ❌ Removed the effect that forced page=1 on mount
+  // useEffect(() => {
+  //   setPage((prev) => (prev === 1 ? prev : 1));
+  // }, [statusId, sourceIds, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo, limit]);
 
   // Persist everything EXCEPT search
   useEffect(() => {
@@ -335,11 +335,9 @@ const SalesLeads = () => {
 
     try {
       await API.private.updateLead(lead.id, { status_id: statusOption.id });
-      // Optionally refetch to be 100% fresh
       await fetchLeads();
       Notification.success("Status updated");
     } catch (err) {
-      // Revert on error
       setLeads(prev);
       Notification.error(err.response?.data?.error || "Failed to update status");
     }
@@ -385,14 +383,48 @@ const SalesLeads = () => {
     setPage(1);
   };
 
+  // >>> Only reset to page 1 when the user actually changes something
   const handleToolbarChange = (partial) => {
-    if ("search" in partial) setSearch(partial.search);
-    if ("statusId" in partial) setStatusId(partial.statusId);
-    if ("sourceIds" in partial) setSourceIds(Array.isArray(partial.sourceIds) ? partial.sourceIds : []); // ← array
-    if ("orderBy" in partial) setOrderBy(partial.orderBy);
-    if ("orderDir" in partial) setOrderDir(partial.orderDir);
-    if ("assignedFrom" in partial) setAssignedFrom(partial.assignedFrom);
-    if ("assignedTo" in partial) setAssignedTo(partial.assignedTo);
+    let changed = false;
+
+    if ("search" in partial && partial.search !== search) {
+      setSearch(partial.search);
+      changed = true;
+    }
+    if ("statusId" in partial && partial.statusId !== statusId) {
+      setStatusId(partial.statusId);
+      changed = true;
+    }
+    if ("sourceIds" in partial) {
+      const next = Array.isArray(partial.sourceIds) ? partial.sourceIds : [];
+      const same =
+        Array.isArray(next) &&
+        Array.isArray(sourceIds) &&
+        next.length === sourceIds.length &&
+        next.every((v, i) => v === sourceIds[i]);
+      if (!same) {
+        setSourceIds(next);
+        changed = true;
+      }
+    }
+    if ("orderBy" in partial && partial.orderBy !== orderBy) {
+      setOrderBy(partial.orderBy);
+      changed = true;
+    }
+    if ("orderDir" in partial && partial.orderDir !== orderDir) {
+      setOrderDir(partial.orderDir);
+      changed = true;
+    }
+    if ("assignedFrom" in partial && partial.assignedFrom !== assignedFrom) {
+      setAssignedFrom(partial.assignedFrom);
+      changed = true;
+    }
+    if ("assignedTo" in partial && partial.assignedTo !== assignedTo) {
+      setAssignedTo(partial.assignedTo);
+      changed = true;
+    }
+
+    if (changed) setPage(1);
   };
 
   const resetAllFilters = () => {
