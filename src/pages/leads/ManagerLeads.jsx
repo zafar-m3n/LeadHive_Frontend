@@ -507,6 +507,34 @@ const ManagerLeads = () => {
 
   const idsOnCurrentPage = useMemo(() => leads.map((l) => l.id), [leads]);
 
+  // Inline Status Update (used by table)
+  const handleInlineStatusUpdate = async (lead, statusOption) => {
+    if (!lead || !statusOption?.id) return;
+    const prev = leads;
+    const now = new Date().toISOString();
+    setLeads((ls) =>
+      ls.map((l) =>
+        l.id === lead.id
+          ? {
+              ...l,
+              status_id: statusOption.id,
+              LeadStatus: { id: statusOption.id, value: statusOption.value, label: statusOption.label },
+              updated_at: now,
+            }
+          : l
+      )
+    );
+
+    try {
+      await API.private.updateLead(lead.id, { status_id: statusOption.id });
+      await fetchLeads();
+      Notification.success("Status updated");
+    } catch (err) {
+      setLeads(prev);
+      Notification.error(err.response?.data?.error || "Failed to update status");
+    }
+  };
+
   return (
     <DefaultLayout>
       <div className="space-y-6">
@@ -593,6 +621,8 @@ const ManagerLeads = () => {
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelect}
                 onToggleSelectAll={(checked) => toggleSelectAll(idsOnCurrentPage, checked)}
+                statuses={statuses} // keep { id, value, label }
+                onStatusUpdate={handleInlineStatusUpdate}
               />
               <Pagination
                 currentPage={page}

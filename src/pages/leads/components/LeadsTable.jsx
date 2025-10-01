@@ -4,6 +4,7 @@ import Badge from "@/components/ui/Badge";
 import IconComponent from "@/components/ui/Icon";
 import Tooltip from "@/components/ui/Tooltip";
 import { getStatusColor, getSourceColor } from "@/utils/leadColors";
+import { formatDate } from "@/utils/formatDate";
 
 const MENU_WIDTH = 260;
 const BASE_MAX_HEIGHT = 288;
@@ -64,12 +65,11 @@ const LeadsTable = ({
   // =========================
   // Helpers
   // =========================
-  // Normalize status option to always have an 'id'
   const normStatus = useCallback((s) => {
     if (!s) return null;
     return {
-      id: s.id ?? s.value, // your SalesLeads provides { value: <id>, label }
-      value: s.value, // may be number (id) or the API 'value' if you pass it through
+      id: s.id ?? s.value,
+      value: s.value,
       label: s.label ?? String(s.id ?? s.value ?? ""),
       _raw: s,
     };
@@ -80,22 +80,6 @@ const LeadsTable = ({
     if (!lead || !sid) return false;
     const currentId = lead?.LeadStatus?.id ?? lead?.status_id;
     return Number(currentId) === Number(sid);
-  }, []);
-
-  const formatDateTime = useCallback((iso) => {
-    if (!iso) return "-";
-    try {
-      const d = new Date(iso);
-      return d.toLocaleString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return "-";
-    }
   }, []);
 
   // Close helpers
@@ -210,7 +194,6 @@ const LeadsTable = ({
   // Toggle handlers
   const toggleAssigneeDropdown = (lead, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    // close status menu if open
     closeStatusDropdown();
     if (dropdownOpen === lead.id) {
       closeAssigneeDropdown();
@@ -224,7 +207,6 @@ const LeadsTable = ({
 
   const toggleStatusDropdown = (lead, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    // close assignee menu if open
     closeAssigneeDropdown();
     if (statusDropdownOpen === lead.id) {
       closeStatusDropdown();
@@ -262,8 +244,7 @@ const LeadsTable = ({
     return false;
   };
 
-  // For status: allow everyone (matches modal behavior for sales)
-  const canEditStatus = () => true;
+  const canEditStatus = () => true; // unchanged: everyone can change status
 
   // Filter assignees by search text (status has no search)
   const filteredAssigneeTargets = useMemo(() => {
@@ -286,8 +267,9 @@ const LeadsTable = ({
   const someOnPageChecked =
     showSelection && leads.length > 0 && leads.some((l) => selectedIds.includes(l.id)) && !allOnPageChecked;
 
-  // Show/hide columns
+  // Column visibility
   const showAssigneeCol = mode !== "sales";
+  const showActionsCol = mode === "admin" || mode === "manager"; // hide Actions for sales
 
   // Compute dynamic colSpan for empty state
   const colsCount =
@@ -299,8 +281,8 @@ const LeadsTable = ({
     1 + // source (hidden md)
     1 + // created
     1 + // last contacted
-    (showAssigneeCol ? 1 : 0) + // assignee (conditional)
-    1; // actions
+    (showAssigneeCol ? 1 : 0) + // assignee
+    (showActionsCol ? 1 : 0); // actions (conditional)
 
   return (
     <div className="w-full overflow-x-auto rounded-lg border border-gray-200 relative">
@@ -354,7 +336,7 @@ const LeadsTable = ({
             <th className={`px-3 py-2 text-left font-semibold ${W_DATE}`}>Created</th>
             <th className={`px-3 py-2 text-left font-semibold ${W_DATE}`}>Last Contacted</th>
             {showAssigneeCol && <th className={`px-3 py-2 text-left font-semibold ${W_ASSIGNEE}`}>Assignee</th>}
-            <th className="px-3 py-2 text-left font-semibold">Actions</th>
+            {showActionsCol && <th className="px-3 py-2 text-left font-semibold">Actions</th>}
           </tr>
         </thead>
 
@@ -374,8 +356,8 @@ const LeadsTable = ({
               const sourceValue = row.LeadSource?.value || "";
               const phone = row.phone && row.phone.length > 4 ? row.phone : "N/A";
               const assigneeName = getCurrentAssigneeName(row);
-              const created = formatDateTime(row.created_at);
-              const lastContacted = formatDateTime(row.updated_at);
+              const created = formatDate(row.created_at);
+              const lastContacted = formatDate(row.updated_at);
 
               const reassignable = canReassign(row);
               const isChecked = selectedIds.includes(row.id);
@@ -417,12 +399,17 @@ const LeadsTable = ({
                     </td>
                   )}
 
-                  {/* Lead (Name + Email) */}
+                  {/* Lead (Name + Email) — clickable to details */}
                   <td className="px-3 py-2 align-top">
-                    <div className={`flex flex-col overflow-hidden ${W_LEAD}`}>
-                      <span className="font-medium text-gray-900 truncate">{fullName}</span>
-                      <span className="text-xs text-gray-500 truncate">{row.email || "-"}</span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onEdit && onEdit(row)}
+                      className={`flex flex-col overflow-hidden text-left group ${W_LEAD}`}
+                      aria-label={`Open details for ${fullName}`}
+                    >
+                      <span className="font-medium text-gray-900 truncate group-hover:underline">{fullName}</span>
+                      <span className="text-xs text-gray-600 truncate group-hover:underline">{row.email || "-"}</span>
+                    </button>
                   </td>
 
                   {/* Company */}
@@ -508,32 +495,24 @@ const LeadsTable = ({
                     </td>
                   )}
 
-                  {/* Actions */}
-                  <td className="px-3 py-2 align-top">
-                    <div className="flex items-center gap-1.5">
-                      <Tooltip content="Edit lead" placement="top" theme="light">
-                        <button
-                          onClick={() => onEdit(row)}
-                          className="inline-flex items-center px-2 py-1 border border-gray-300 rounded hover:bg-gray-100"
-                          aria-label="Edit lead"
-                        >
-                          <IconComponent icon="mdi:pencil" width={18} className="text-gray-800" />
-                        </button>
-                      </Tooltip>
-
-                      {onDelete && (
-                        <Tooltip content="Delete lead" placement="top" theme="light">
-                          <button
-                            onClick={() => onDelete(row)}
-                            className="inline-flex items-center px-2 py-1 border border-gray-300 rounded hover:bg-gray-100"
-                            aria-label="Delete lead"
-                          >
-                            <IconComponent icon="mdi:delete" width={18} className="text-gray-800" />
-                          </button>
-                        </Tooltip>
-                      )}
-                    </div>
-                  </td>
+                  {/* Actions — no Edit button; Delete only for admin/manager */}
+                  {showActionsCol && (
+                    <td className="px-3 py-2 align-top">
+                      <div className="flex items-center gap-1.5">
+                        {onDelete && (
+                          <Tooltip content="Delete lead" placement="top" theme="light">
+                            <button
+                              onClick={() => onDelete(row)}
+                              className="inline-flex items-center px-2 py-1 border border-gray-300 rounded hover:bg-gray-100"
+                              aria-label="Delete lead"
+                            >
+                              <IconComponent icon="mdi:delete" width={18} className="text-gray-800" />
+                            </button>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               );
             })
@@ -557,36 +536,34 @@ const LeadsTable = ({
             aria-hidden={!statusDropdownOpen}
           >
             <div className="app-scrollbar overflow-y-auto" style={{ maxHeight: `${statusDropdownPos.maxHeight}px` }}>
-              {Array.isArray(statuses) && statuses.length > 0 ? (
-                statuses.map((raw) => {
-                  const s = normStatus(raw);
-                  const isCurrent = sameStatusById(openLeadStatus, s);
+              {(() => {
+                // Build list without the current status
+                const all = (Array.isArray(statuses) ? statuses : []).map(normStatus).filter(Boolean);
+                const list = all.filter((s) => !sameStatusById(openLeadStatus, s));
 
-                  return (
-                    <div
-                      key={s.id}
-                      onClick={async () => {
-                        const lead = openLeadStatus;
-                        closeStatusDropdown();
-                        if (lead && onStatusUpdate) {
-                          // Pass normalized shape so SalesLeads handler receives an 'id'
-                          await onStatusUpdate(lead, { id: s.id, label: s.label, value: s.value });
-                        }
-                      }}
-                      className={`px-3 py-2 text-xs cursor-pointer hover:bg-indigo-50 ${
-                        isCurrent ? "bg-indigo-50 font-medium" : "text-gray-800"
-                      }`}
-                      role="option"
-                      aria-selected={isCurrent}
-                      title={s.label}
-                    >
-                      <span className="truncate block">{s.label}</span>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="px-3 py-2 text-gray-500 text-xs">No statuses found</div>
-              )}
+                if (!list.length) {
+                  return <div className="px-3 py-2 text-gray-500 text-xs">No other statuses</div>;
+                }
+
+                return list.map((s) => (
+                  <div
+                    key={s.id}
+                    onClick={async () => {
+                      const lead = openLeadStatus;
+                      closeStatusDropdown();
+                      if (lead && onStatusUpdate) {
+                        await onStatusUpdate(lead, { id: s.id, label: s.label, value: s.value });
+                      }
+                    }}
+                    className="px-3 py-2 text-xs cursor-pointer hover:bg-indigo-50 text-gray-800"
+                    role="option"
+                    aria-selected={false}
+                    title={s.label}
+                  >
+                    <span className="truncate block">{s.label}</span>
+                  </div>
+                ));
+              })()}
             </div>
           </div>,
           document.body
