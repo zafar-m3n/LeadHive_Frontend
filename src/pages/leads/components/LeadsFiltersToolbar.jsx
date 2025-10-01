@@ -1,4 +1,3 @@
-// src/pages/admin/components/LeadsFiltersToolbar.jsx
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import Select from "@/components/form/Select";
 import TextInput from "@/components/form/TextInput"; // keep for Search
@@ -103,8 +102,8 @@ const LeadsFiltersToolbar = ({
   showAssignee = false,
   values = {
     search: "",
-    statusId: "",
-    sourceIds: [], // <-- multi-source
+    statusIds: [], // <-- multi-status (array)
+    sourceIds: [], // <-- multi-source (array)
     assigneeId: "",
     orderBy: "",
     orderDir: "ASC",
@@ -117,21 +116,47 @@ const LeadsFiltersToolbar = ({
   onChange,
   onResetAll,
 }) => {
-  const { search, statusId, sourceIds = [], assigneeId, orderBy, orderDir, limit, assignedFrom, assignedTo } = values;
+  const {
+    search,
+    statusIds = [],
+    sourceIds = [],
+    assigneeId,
+    orderBy,
+    orderDir,
+    limit,
+    assignedFrom,
+    assignedTo,
+  } = values;
 
   const getLabel = (arr, val) => arr.find((x) => String(x.value) === String(val))?.label;
 
-  // If there are many selected sources, collapse to a single summary chip
+  // Collapse into one summary chip when too many selections
+  const MAX_STATUS_CHIPS = 4;
   const MAX_SOURCE_CHIPS = 4;
 
   const chips = useMemo(() => {
     const items = [];
 
-    if (statusId) items.push({ key: "status", label: `Status: ${getLabel(statuses, statusId) || statusId}` });
+    // statuses (multi)
+    if (Array.isArray(statusIds) && statusIds.length) {
+      if (statusIds.length <= MAX_STATUS_CHIPS) {
+        statusIds.forEach((sid) => {
+          items.push({
+            key: `status:${sid}`,
+            label: `Status: ${getLabel(statuses, sid) || sid}`,
+          });
+        });
+      } else {
+        items.push({
+          key: "statuses:all",
+          label: `Statuses: ${statusIds.length} selected`,
+        });
+      }
+    }
 
+    // sources (multi)
     if (Array.isArray(sourceIds) && sourceIds.length) {
       if (sourceIds.length <= MAX_SOURCE_CHIPS) {
-        // granular chips (each removable)
         sourceIds.forEach((sid) => {
           items.push({
             key: `source:${sid}`,
@@ -139,7 +164,6 @@ const LeadsFiltersToolbar = ({
           });
         });
       } else {
-        // one summary chip; remove-all behavior
         items.push({
           key: "sources:all",
           label: `Sources: ${sourceIds.length} selected`,
@@ -164,7 +188,7 @@ const LeadsFiltersToolbar = ({
     return items;
   }, [
     search,
-    statusId,
+    statusIds,
     sourceIds,
     assigneeId,
     orderBy,
@@ -181,18 +205,31 @@ const LeadsFiltersToolbar = ({
   const hasActiveFilters = chips.length > 0;
 
   const clearChip = (key) => {
-    if (key === "status") onChange({ statusId: "" });
+    // statuses
+    if (key.startsWith("status:")) {
+      const id = key.split(":")[1];
+      const next = (statusIds || []).filter((s) => String(s) !== String(id));
+      onChange({ statusIds: next });
+      return;
+    }
+    if (key === "statuses:all") {
+      onChange({ statusIds: [] });
+      return;
+    }
 
+    // sources
     if (key.startsWith("source:")) {
       const id = key.split(":")[1];
       const next = (sourceIds || []).filter((s) => String(s) !== String(id));
       onChange({ sourceIds: next });
+      return;
     }
-
     if (key === "sources:all") {
       onChange({ sourceIds: [] });
+      return;
     }
 
+    // other filters
     if (key === "assignee") onChange({ assigneeId: "" });
     if (key === "orderBy") onChange({ orderBy: "" });
     if (key === "orderDir") onChange({ orderDir: "ASC" });
@@ -248,11 +285,12 @@ const LeadsFiltersToolbar = ({
 
       {/* Filters grid — responsive */}
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        <Select
-          label="Status"
-          value={statusId}
-          onChange={(v) => onChange({ statusId: v })}
-          options={[{ value: "", label: "All" }, ...statuses]}
+        {/* Multi-status filter */}
+        <MultiSelect
+          label="Statuses"
+          value={Array.isArray(statusIds) ? statusIds : []}
+          onChange={(vals) => onChange({ statusIds: vals })}
+          options={statuses}
           placeholder="All statuses"
         />
 

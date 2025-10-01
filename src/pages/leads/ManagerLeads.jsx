@@ -30,8 +30,8 @@ const useDebouncedValue = (value, delay = 300) => {
 // Defaults (note: search is NEVER persisted)
 const DEFAULT_FILTERS = {
   search: "",
-  statusId: "",
-  sourceIds: [], // ← multi-source now
+  statusIds: [], // ← multi-status
+  sourceIds: [], // ← multi-source
   assigneeId: "",
   orderBy: "",
   orderDir: "ASC",
@@ -45,8 +45,7 @@ const DEFAULT_FILTERS = {
 const getInitialFilters = () => {
   const stored = token.getPersistedLeadsFilters(DEFAULT_FILTERS) || {};
   return {
-    statusId: stored.statusId ?? DEFAULT_FILTERS.statusId,
-    // ensure array for sources
+    statusIds: Array.isArray(stored.statusIds) ? stored.statusIds : DEFAULT_FILTERS.statusIds,
     sourceIds: Array.isArray(stored.sourceIds) ? stored.sourceIds : DEFAULT_FILTERS.sourceIds,
     assigneeId: stored.assigneeId ?? DEFAULT_FILTERS.assigneeId,
     orderBy: stored.orderBy ?? DEFAULT_FILTERS.orderBy,
@@ -93,8 +92,8 @@ const ManagerLeads = () => {
   const [totalPages, setTotalPages] = useState(1);
 
   // Filters / Sorting / Search
-  const [statusId, setStatusId] = useState(() => initial.statusId);
-  const [sourceIds, setSourceIds] = useState(() => initial.sourceIds); // ← array now
+  const [statusIds, setStatusIds] = useState(() => initial.statusIds); // ← array
+  const [sourceIds, setSourceIds] = useState(() => initial.sourceIds); // ← array
   const [assigneeId, setAssigneeId] = useState(() => initial.assigneeId);
   const [orderBy, setOrderBy] = useState(() => initial.orderBy);
   const [orderDir, setOrderDir] = useState(() => initial.orderDir);
@@ -135,8 +134,8 @@ const ManagerLeads = () => {
       const params = {
         page: page ?? 1,
         limit,
-        status_id: statusId || undefined,
-        // serialize array to CSV for API
+        // serialize arrays to CSV for API
+        status_ids: Array.isArray(statusIds) && statusIds.length ? statusIds.join(",") : undefined,
         source_ids: Array.isArray(sourceIds) && sourceIds.length ? sourceIds.join(",") : undefined,
         assignee_id: assigneeId || undefined, // manager can filter by any assignee
         orderBy: orderBy || undefined,
@@ -159,7 +158,7 @@ const ManagerLeads = () => {
     } finally {
       if (fetchId === fetchGuard.current) setLoading(false);
     }
-  }, [page, limit, statusId, sourceIds, assigneeId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo]);
+  }, [page, limit, statusIds, sourceIds, assigneeId, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo]);
 
   const fetchStatuses = useCallback(async () => {
     try {
@@ -241,7 +240,7 @@ const ManagerLeads = () => {
   // Persist everything EXCEPT search
   useEffect(() => {
     token.setPersistedLeadsFilters({
-      statusId,
+      statusIds, // ← persist array
       sourceIds, // ← persist array
       assigneeId,
       orderBy,
@@ -251,7 +250,7 @@ const ManagerLeads = () => {
       limit,
       page,
     });
-  }, [statusId, sourceIds, assigneeId, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
+  }, [statusIds, sourceIds, assigneeId, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
 
   // === Handlers (single) ===
   const handleSubmit = async (data) => {
@@ -427,22 +426,35 @@ const ManagerLeads = () => {
       setSearch(partial.search);
       changed = true;
     }
-    if (Object.prototype.hasOwnProperty.call(partial, "statusId") && partial.statusId !== statusId) {
-      setStatusId(partial.statusId);
-      changed = true;
+
+    // multi-status
+    if (Object.prototype.hasOwnProperty.call(partial, "statusIds")) {
+      const next = Array.isArray(partial.statusIds) ? partial.statusIds : [];
+      const same =
+        Array.isArray(next) &&
+        Array.isArray(statusIds) &&
+        next.length === statusIds.length &&
+        next.every((v, i) => String(v) === String(statusIds[i]));
+      if (!same) {
+        setStatusIds(next);
+        changed = true;
+      }
     }
+
+    // multi-source
     if (Object.prototype.hasOwnProperty.call(partial, "sourceIds")) {
-      const next = partial.sourceIds || [];
+      const next = Array.isArray(partial.sourceIds) ? partial.sourceIds : [];
       const same =
         Array.isArray(next) &&
         Array.isArray(sourceIds) &&
         next.length === sourceIds.length &&
-        next.every((v, i) => v === sourceIds[i]);
+        next.every((v, i) => String(v) === String(sourceIds[i]));
       if (!same) {
         setSourceIds(next);
         changed = true;
       }
     }
+
     if (Object.prototype.hasOwnProperty.call(partial, "assigneeId") && partial.assigneeId !== assigneeId) {
       setAssigneeId(partial.assigneeId);
       changed = true;
@@ -468,7 +480,7 @@ const ManagerLeads = () => {
   };
 
   const resetAllFilters = () => {
-    setStatusId(DEFAULT_FILTERS.statusId);
+    setStatusIds(DEFAULT_FILTERS.statusIds); // ← []
     setSourceIds(DEFAULT_FILTERS.sourceIds); // ← []
     setAssigneeId(DEFAULT_FILTERS.assigneeId);
     setOrderBy(DEFAULT_FILTERS.orderBy);
@@ -481,7 +493,7 @@ const ManagerLeads = () => {
 
     // Persist everything EXCEPT search
     token.setPersistedLeadsFilters({
-      statusId: DEFAULT_FILTERS.statusId,
+      statusIds: DEFAULT_FILTERS.statusIds,
       sourceIds: DEFAULT_FILTERS.sourceIds,
       assigneeId: DEFAULT_FILTERS.assigneeId,
       orderBy: DEFAULT_FILTERS.orderBy,
@@ -541,8 +553,8 @@ const ManagerLeads = () => {
           showAssignee={true}
           values={{
             search,
-            statusId,
-            sourceIds, // ← array to Toolbar
+            statusIds, // ← pass array
+            sourceIds, // ← pass array
             assigneeId,
             orderBy,
             orderDir,

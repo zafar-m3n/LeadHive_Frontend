@@ -32,8 +32,8 @@ const useDebouncedValue = (value, delay = 300) => {
  *  ============================ */
 const DEFAULT_FILTERS = {
   search: "",
-  statusId: "",
-  sourceIds: [], // ← multi-select now
+  statusIds: [], // ← multi-status
+  sourceIds: [], // ← multi-source
   orderBy: "",
   orderDir: "ASC",
   assignedFrom: "",
@@ -46,8 +46,8 @@ const DEFAULT_FILTERS = {
 const getInitialFilters = () => {
   const stored = token.getPersistedLeadsFilters(DEFAULT_FILTERS) || {};
   return {
-    statusId: stored.statusId ?? DEFAULT_FILTERS.statusId,
-    // ensure array for sources
+    // ensure arrays for multi-selects
+    statusIds: Array.isArray(stored.statusIds) ? stored.statusIds : DEFAULT_FILTERS.statusIds,
     sourceIds: Array.isArray(stored.sourceIds) ? stored.sourceIds : DEFAULT_FILTERS.sourceIds,
     orderBy: stored.orderBy ?? DEFAULT_FILTERS.orderBy,
     orderDir: stored.orderDir ?? DEFAULT_FILTERS.orderDir,
@@ -135,7 +135,7 @@ const SalesLeads = () => {
   const [totalPages, setTotalPages] = useState(1);
 
   // Filters (search not persisted)
-  const [statusId, setStatusId] = useState(() => initial.statusId);
+  const [statusIds, setStatusIds] = useState(() => initial.statusIds); // ← array
   const [sourceIds, setSourceIds] = useState(() => initial.sourceIds); // ← array
   const [orderBy, setOrderBy] = useState(() => initial.orderBy);
   const [orderDir, setOrderDir] = useState(() => initial.orderDir);
@@ -164,8 +164,8 @@ const SalesLeads = () => {
       const params = {
         page: page ?? 1,
         limit,
-        status_id: statusId || undefined,
-        // serialize array to CSV for API
+        // serialize arrays to CSV for API
+        status_ids: Array.isArray(statusIds) && statusIds.length ? statusIds.join(",") : undefined,
         source_ids: Array.isArray(sourceIds) && sourceIds.length ? sourceIds.join(",") : undefined,
         orderBy: orderBy || undefined,
         orderDir: orderDir || undefined,
@@ -186,7 +186,7 @@ const SalesLeads = () => {
     } finally {
       if (fetchId === fetchGuard.current) setLoading(false);
     }
-  }, [page, limit, statusId, sourceIds, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo]);
+  }, [page, limit, statusIds, sourceIds, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo]);
 
   const fetchStatuses = useCallback(async () => {
     try {
@@ -247,15 +247,10 @@ const SalesLeads = () => {
     fetchLeads();
   }, [fetchLeads]);
 
-  // ❌ Removed the effect that forced page=1 on mount
-  // useEffect(() => {
-  //   setPage((prev) => (prev === 1 ? prev : 1));
-  // }, [statusId, sourceIds, orderBy, orderDir, debouncedSearch, assignedFrom, assignedTo, limit]);
-
   // Persist everything EXCEPT search
   useEffect(() => {
     token.setPersistedLeadsFilters({
-      statusId,
+      statusIds, // ← persist array
       sourceIds, // ← persist array
       orderBy,
       orderDir,
@@ -264,7 +259,7 @@ const SalesLeads = () => {
       limit,
       page,
     });
-  }, [statusId, sourceIds, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
+  }, [statusIds, sourceIds, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
 
   /** ============================
    *  Handlers
@@ -314,10 +309,9 @@ const SalesLeads = () => {
     }
   };
 
-  // NEW: Inline Status Update handler (used by table)
+  // Inline Status Update (used by table)
   const handleInlineStatusUpdate = async (lead, statusOption) => {
     if (!lead || !statusOption?.id) return;
-    // Optimistic UI update
     const prev = leads;
     const now = new Date().toISOString();
     setLeads((ls) =>
@@ -391,22 +385,35 @@ const SalesLeads = () => {
       setSearch(partial.search);
       changed = true;
     }
-    if ("statusId" in partial && partial.statusId !== statusId) {
-      setStatusId(partial.statusId);
-      changed = true;
+
+    // multi-status
+    if ("statusIds" in partial) {
+      const next = Array.isArray(partial.statusIds) ? partial.statusIds : [];
+      const same =
+        Array.isArray(next) &&
+        Array.isArray(statusIds) &&
+        next.length === statusIds.length &&
+        next.every((v, i) => String(v) === String(statusIds[i]));
+      if (!same) {
+        setStatusIds(next);
+        changed = true;
+      }
     }
+
+    // multi-source
     if ("sourceIds" in partial) {
       const next = Array.isArray(partial.sourceIds) ? partial.sourceIds : [];
       const same =
         Array.isArray(next) &&
         Array.isArray(sourceIds) &&
         next.length === sourceIds.length &&
-        next.every((v, i) => v === sourceIds[i]);
+        next.every((v, i) => String(v) === String(sourceIds[i]));
       if (!same) {
         setSourceIds(next);
         changed = true;
       }
     }
+
     if ("orderBy" in partial && partial.orderBy !== orderBy) {
       setOrderBy(partial.orderBy);
       changed = true;
@@ -428,7 +435,7 @@ const SalesLeads = () => {
   };
 
   const resetAllFilters = () => {
-    setStatusId(DEFAULT_FILTERS.statusId);
+    setStatusIds(DEFAULT_FILTERS.statusIds); // ← []
     setSourceIds(DEFAULT_FILTERS.sourceIds); // ← []
     setOrderBy(DEFAULT_FILTERS.orderBy);
     setOrderDir(DEFAULT_FILTERS.orderDir);
@@ -440,7 +447,7 @@ const SalesLeads = () => {
 
     // persist everything EXCEPT search
     token.setPersistedLeadsFilters({
-      statusId: DEFAULT_FILTERS.statusId,
+      statusIds: DEFAULT_FILTERS.statusIds,
       sourceIds: DEFAULT_FILTERS.sourceIds,
       orderBy: DEFAULT_FILTERS.orderBy,
       orderDir: DEFAULT_FILTERS.orderDir,
@@ -473,8 +480,8 @@ const SalesLeads = () => {
           orderDirOptions={orderDirOptions}
           values={{
             search,
-            statusId,
-            sourceIds, // ← array to Toolbar
+            statusIds, // ← pass array for multi-status
+            sourceIds, // ← pass array for multi-source
             orderBy,
             orderDir,
             limit,
@@ -502,7 +509,7 @@ const SalesLeads = () => {
                 mode="sales"
                 selfId={me?.id || null}
                 statuses={statuses} // keep { id, value, label }
-                onStatusUpdate={handleInlineStatusUpdate} // <-- pass the correct prop
+                onStatusUpdate={handleInlineStatusUpdate}
               />
               <Pagination
                 currentPage={page}
