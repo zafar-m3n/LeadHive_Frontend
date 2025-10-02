@@ -1,6 +1,6 @@
 // src/pages/sales/SalesLeadDetails.jsx
 import React, { useEffect, useState, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
 import Notification from "@/components/ui/Notification";
@@ -43,6 +43,7 @@ const FieldRow = ({ label, value, icon }) => (
  *  Component
  *  ============================ */
 const SalesLeadDetails = () => {
+  const navigate = useNavigate();
   const { id } = useParams();
   const [lead, setLead] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -111,7 +112,7 @@ const SalesLeadDetails = () => {
     try {
       await API.private.updateLead(id, { status_id });
       Notification.success("Status updated successfully");
-      await fetchLead();
+      navigate(-1);
       setIsStatusModalOpen(false);
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to update status");

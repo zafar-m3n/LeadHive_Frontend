@@ -1,6 +1,6 @@
 // src/pages/admin/LeadDetails.jsx
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
 import Notification from "@/components/ui/Notification";
@@ -51,6 +51,7 @@ const FieldRow = ({ label, value, icon }) => (
  *  Component
  *  ============================ */
 const LeadDetails = () => {
+  const navigate = useNavigate();
   const { id } = useParams();
   const [lead, setLead] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -116,7 +117,8 @@ const LeadDetails = () => {
       await API.private.updateLead(id, data);
       Notification.success("Lead updated successfully");
       setIsModalOpen(false);
-      await fetchLead();
+      navigate(-1);
+      // await fetchLead();
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to update lead");
     } finally {
