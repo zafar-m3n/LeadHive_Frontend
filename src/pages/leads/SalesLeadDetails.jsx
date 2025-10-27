@@ -11,7 +11,7 @@ import Icon from "@/components/ui/Icon";
 import Badge from "@/components/ui/Badge";
 import SalesLeadsModal from "./components/SalesLeadsModal";
 
-/** ============================
+/* ============================
  *  Helpers
  *  ============================ */
 const initialsFromName = (first, last) => {
@@ -30,21 +30,26 @@ const initialsFromName = (first, last) => {
 };
 
 const FieldRow = ({ label, value, icon }) => (
-  <div className="flex items-start gap-3 py-2">
-    {icon && <Icon icon={icon} width={20} className="mt-0.5 text-gray-500" />}
+  <div className="flex items-start gap-3 py-3">
+    {icon && (
+      <span className="flex-shrink-0 p-2 bg-accent/10 rounded-md">
+        <Icon icon={icon} width={18} className="text-accent" />
+      </span>
+    )}
     <div className="min-w-0">
       <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div className="text-gray-800 truncate">{value ?? "N/A"}</div>
+      <div className="text-gray-900 font-medium truncate">{value ?? "N/A"}</div>
     </div>
   </div>
 );
 
-/** ============================
+/* ============================
  *  Component
  *  ============================ */
 const SalesLeadDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+
   const [lead, setLead] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -60,11 +65,8 @@ const SalesLeadDetails = () => {
     setLoading(true);
     try {
       const res = await API.private.getLeadById(id);
-      if (res.data?.code === "OK") {
-        setLead(res.data.data);
-      } else {
-        Notification.error("Failed to fetch lead details");
-      }
+      if (res.data?.code === "OK") setLead(res.data.data);
+      else Notification.error("Failed to fetch lead details");
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to fetch lead");
     } finally {
@@ -75,11 +77,9 @@ const SalesLeadDetails = () => {
   const fetchStatuses = useCallback(async () => {
     try {
       const res = await API.private.getLeadStatuses();
-      if (res.data?.code === "OK") {
-        setStatuses(res.data.data.map((s) => ({ value: s.id, label: s.label })));
-      }
+      if (res.data?.code === "OK") setStatuses(res.data.data.map((s) => ({ value: s.id, label: s.label })));
     } catch {
-      // silent fail
+      // silent
     }
   }, []);
 
@@ -112,8 +112,8 @@ const SalesLeadDetails = () => {
     try {
       await API.private.updateLead(id, { status_id });
       Notification.success("Status updated successfully");
-      navigate(-1);
       setIsStatusModalOpen(false);
+      navigate(-1);
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to update status");
     }
@@ -139,97 +139,116 @@ const SalesLeadDetails = () => {
 
   return (
     <DefaultLayout>
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-800">Lead Details</h1>
-        <div className="w-fit">
-          <AccentButton text="Edit Status" size="sm" onClick={() => setIsStatusModalOpen(true)} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Lead Info Card */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl border border-gray-200 p-6">
-            {/* Avatar + Badges */}
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-full bg-accent/10 text-accent border border-accent/20 flex items-center justify-center text-xl font-semibold">
-                {initials}
-              </div>
-              <div>
-                <div className="text-xl font-semibold text-gray-800">
-                  {lead.first_name} {lead.last_name}
-                </div>
-                <div className="inline-flex flex-wrap gap-2 mt-1 items-center">
-                  <Badge text={lead.LeadStatus?.label || "No Status"} color="blue" size="sm" />
-                  <Badge text={lead.LeadSource?.label || "No Source"} color="purple" size="sm" />
-                  <Badge
-                    text={lead.LeadAssignments?.[0]?.assignee?.full_name || "Unassigned"}
-                    color="green"
-                    size="sm"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Details */}
-            <div className="mt-6 divide-y divide-gray-100">
-              <FieldRow label="Company" value={lead.company || "N/A"} icon="mdi:office-building-outline" />
-              <FieldRow label="Email" value={lead.email || "N/A"} icon="mdi:email-outline" />
-              <FieldRow label="Phone" value={lead.phone || "N/A"} icon="mdi:phone-outline" />
-              <FieldRow label="Country" value={lead.country || "N/A"} icon="mdi:earth" />
-              <FieldRow label="Value" value={lead.value_decimal ?? "N/A"} icon="mdi:currency-usd" />
-            </div>
+      <div className="space-y-8">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
+              <Icon icon="mdi:account-circle" width={30} className="text-accent" />
+              Lead Details
+            </h1>
+            <p className="text-gray-500 text-sm mt-1">Review contact info, add notes, and update status.</p>
+          </div>
+          <div className="w-fit">
+            <AccentButton text="Edit Status" size="sm" onClick={() => setIsStatusModalOpen(true)} />
           </div>
         </div>
 
-        {/* Notes Card */}
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
-            <h2 className="text-lg font-semibold text-gray-800">Notes</h2>
+        {/* Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Lead Info Card */}
+          <div className="lg:col-span-1">
+            <div className="bg-gradient-to-b from-accent/10 to-white rounded-2xl border border-accent/20 p-6 shadow-md hover:shadow-lg transition-all duration-200">
+              {/* Avatar + Badges */}
+              <div className="flex items-center gap-4 border-b border-accent/10 pb-4">
+                <div className="w-20 h-20 rounded-full bg-accent text-white flex items-center justify-center text-2xl font-semibold shadow-inner">
+                  {initials}
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold text-gray-900">
+                    {lead.first_name} {lead.last_name}
+                  </div>
+                  <div className="inline-flex flex-wrap gap-2 mt-1 items-center">
+                    <Badge text={lead.LeadStatus?.label || "No Status"} color="blue" size="sm" />
+                    <Badge text={lead.LeadSource?.label || "No Source"} color="purple" size="sm" />
+                    <Badge
+                      text={lead.LeadAssignments?.[0]?.assignee?.full_name || "Unassigned"}
+                      color="green"
+                      size="sm"
+                    />
+                  </div>
+                </div>
+              </div>
 
-            {/* Notes List */}
-            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-              {lead.notes && lead.notes.length > 0 ? (
-                lead.notes.map((note) => {
-                  const authorInitials = initialsFromName(
-                    note.author?.full_name,
-                    note.author?.full_name?.split(" ").slice(-1)[0]
-                  );
-                  return (
-                    <div
-                      key={note.id}
-                      className="flex items-start gap-3 bg-gray-50 border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition"
-                    >
-                      <div className="w-10 h-10 rounded-full bg-accent/10 text-accent flex items-center justify-center font-semibold">
-                        {authorInitials}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-800">{note.body}</p>
-                        <div className="text-xs text-gray-500 mt-1">
-                          by {note.author?.full_name || note.author?.email || "Unknown"} ·{" "}
-                          {new Date(note.created_at).toLocaleString()}
+              {/* Details */}
+              <div className="mt-5 divide-y divide-gray-100">
+                <FieldRow label="Company" value={lead.company || "N/A"} icon="mdi:office-building-outline" />
+                <FieldRow label="Email" value={lead.email || "N/A"} icon="mdi:email-outline" />
+                <FieldRow label="Phone" value={lead.phone || "N/A"} icon="mdi:phone-outline" />
+                <FieldRow label="Country" value={lead.country || "N/A"} icon="mdi:earth" />
+                <FieldRow label="Value" value={lead.value_decimal ?? "N/A"} icon="mdi:currency-usd" />
+              </div>
+            </div>
+          </div>
+
+          {/* Notes Card */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-md hover:shadow-lg transition-all duration-200">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                  <Icon icon="mdi:note-text-outline" width={22} className="text-accent" />
+                  Notes
+                </h2>
+              </div>
+
+              {/* Notes List */}
+              <div className="space-y-4 max-h-[420px] overflow-y-auto app-scrollbar pr-2">
+                {lead.notes && lead.notes.length > 0 ? (
+                  lead.notes.map((note) => {
+                    const authorInitials = initialsFromName(
+                      note.author?.full_name,
+                      note.author?.full_name?.split(" ").slice(-1)[0]
+                    );
+                    return (
+                      <div
+                        key={note.id}
+                        className="flex items-start gap-4 bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-xl p-4 hover:shadow-sm transition-all"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-accent/10 text-accent flex items-center justify-center font-semibold">
+                          {authorInitials}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-800 leading-relaxed">{note.body}</p>
+                          <div className="text-xs text-gray-500 mt-1">
+                            by {note.author?.full_name || note.author?.email || "Unknown"} ·{" "}
+                            {new Date(note.created_at).toLocaleString()}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-sm text-gray-500">No notes yet.</p>
-              )}
-            </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-gray-500 italic text-center py-4">No notes yet.</p>
+                )}
+              </div>
 
-            {/* Add Note Form */}
-            <div className="space-y-2">
-              <textarea
-                value={noteInput}
-                onChange={(e) => setNoteInput(e.target.value)}
-                rows={3}
-                placeholder="Write a new note..."
-                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent shadow-sm"
-              />
-              <div className="flex justify-end gap-2">
-                <GrayButton text="Clear" onClick={() => setNoteInput("")} disabled={submittingNote} />
-                <AccentButton text="Add Note" onClick={handleAddNote} loading={submittingNote} />
+              {/* Add Note Form */}
+              <div className="mt-6 space-y-3">
+                <textarea
+                  value={noteInput}
+                  onChange={(e) => setNoteInput(e.target.value)}
+                  rows={3}
+                  placeholder="Write a new note..."
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent shadow-sm"
+                />
+                <div className="flex justify-end gap-2">
+                  <div className="w-fit">
+                    <GrayButton text="Clear" onClick={() => setNoteInput("")} disabled={submittingNote} />
+                  </div>
+                  <div className="w-fit">
+                    <AccentButton text="Add Note" onClick={handleAddNote} loading={submittingNote} />
+                  </div>
+                </div>
               </div>
             </div>
           </div>

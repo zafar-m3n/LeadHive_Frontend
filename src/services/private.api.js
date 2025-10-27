@@ -239,6 +239,13 @@ const getLeadAssignments = async (id) => {
   });
 };
 
+// Delete a specific note for a lead (Admin & Manager only)
+const deleteLeadNote = async (leadId, noteId) => {
+  return await instance.apiClient.delete(`/api/v1/leads/${leadId}/notes/${noteId}`, {
+    headers: instance.defaultHeaders(),
+  });
+};
+
 /* ========================== */
 /* Lead Upload Functions      */
 /* ========================== */
@@ -452,6 +459,7 @@ const privateAPI = {
   deleteLead,
   assignLead,
   getLeadAssignments,
+  deleteLeadNote,
 
   // Leads Upload
   getLeadTemplateSchema,
