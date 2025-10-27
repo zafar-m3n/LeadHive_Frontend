@@ -73,7 +73,7 @@ const AdminLeads = () => {
   const [leads, setLeads] = useState([]);
   const [statuses, setStatuses] = useState([]);
   const [sources, setSources] = useState([]);
-  const [managers, setManagers] = useState([]);
+  const [managers, setManagers] = useState([]); // ← will be populated with ALL assignees
   const [assigneeOptions, setAssigneeOptions] = useState([]);
 
   // Bulk targets (uses /bulk/targets)
@@ -198,27 +198,21 @@ const AdminLeads = () => {
     }
   }, []);
 
-  const fetchManagersAndAdmins = useCallback(async () => {
-    try {
-      const res = await API.private.getManagersAndAdmins();
-      if (res.data?.code === "OK") {
-        setManagers(res.data.data || []);
-      }
-    } catch {
-      Notification.error("Failed to fetch assignees");
-    }
-  }, []);
-
+  // Use UNIVERSAL assignees (admins + managers + reps) for:
+  // - filter dropdown (assigneeOptions)
+  // - row-level assign menu (pass as `managers` prop to LeadsTable)
   const fetchAssignees = useCallback(async () => {
     if (!isAdminOrManager) return;
     try {
       const res = await API.private.getAssignees();
       if (res.data?.code === "OK") {
-        const options = (res.data.data || []).map((u) => ({
+        const all = res.data.data || [];
+        const options = all.map((u) => ({
           value: u.id,
           label: u.full_name ? `${u.full_name} (${u.email})` : u.email,
         }));
         setAssigneeOptions(options);
+        setManagers(all); // ← feed the table with everyone (keeps prop name stable)
       }
     } catch {
       Notification.error("Failed to fetch assignees");
@@ -241,13 +235,11 @@ const AdminLeads = () => {
   useEffect(() => {
     fetchStatuses();
     fetchSources();
-    fetchManagersAndAdmins();
-    fetchAssignees();
+    fetchAssignees(); // ← replaces managers/admins-only list
     fetchBulkTargets();
-  }, [fetchStatuses, fetchSources, fetchManagersAndAdmins, fetchAssignees, fetchBulkTargets]);
+  }, [fetchStatuses, fetchSources, fetchAssignees, fetchBulkTargets]);
 
-  // Initial and subsequent fetches — because initial state is already hydrated,
-  // this runs once with the correct persisted values.
+  // Initial and subsequent fetches
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
