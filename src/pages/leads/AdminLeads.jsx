@@ -12,10 +12,8 @@ import LeadsTable from "./components/LeadsTable";
 import LeadsFiltersToolbar from "./components/LeadsFiltersToolbar";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import ConfirmAssignModal from "./components/ConfirmAssignModal";
-import Modal from "@/components/ui/Modal";
-import Select from "@/components/form/Select";
-import GrayButton from "@/components/ui/GrayButton";
 import token from "@/lib/utilities";
+import BulkActionsModal from "./components/BulkActionsModal";
 
 /** ============================
  *  Simple debounce hook
@@ -71,9 +69,9 @@ const AdminLeads = () => {
 
   // Data
   const [leads, setLeads] = useState([]);
-  const [statuses, setStatuses] = useState([]);
-  const [sources, setSources] = useState([]);
-  const [managers, setManagers] = useState([]); // ← will be populated with ALL assignees
+  const [statuses, setStatuses] = useState([]); // [{value:id,label}]
+  const [sources, setSources] = useState([]); // [{value:id,label}]
+  const [managers, setManagers] = useState([]); // ← ALL assignees
   const [assigneeOptions, setAssigneeOptions] = useState([]);
 
   // Bulk targets (uses /bulk/targets)
@@ -109,8 +107,8 @@ const AdminLeads = () => {
   const [assignedTo, setAssignedTo] = useState(() => initial.assignedTo);
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  // Modals
-  const [isModalOpen, setIsModalOpen] = useState(false); // for Add Lead
+  // Modals (single-lead)
+  const [isModalOpen, setIsModalOpen] = useState(false); // Add Lead
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -121,11 +119,8 @@ const AdminLeads = () => {
   const [selectedIds, setSelectedIds] = useState([]);
   const hasSelection = selectedIds.length > 0;
 
-  // Bulk modals
-  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
-  const [bulkAssigneeId, setBulkAssigneeId] = useState("");
-  const [bulkOverwrite, setBulkOverwrite] = useState(false);
-  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  // Bulk Actions modal
+  const [bulkActionsOpen, setBulkActionsOpen] = useState(false);
 
   // Prevent stale updates (race-safe)
   const fetchGuard = useRef(0);
@@ -198,9 +193,7 @@ const AdminLeads = () => {
     }
   }, []);
 
-  // Use UNIVERSAL assignees (admins + managers + reps) for:
-  // - filter dropdown (assigneeOptions)
-  // - row-level assign menu (pass as `managers` prop to LeadsTable)
+  // Use UNIVERSAL assignees (admins + managers + reps)
   const fetchAssignees = useCallback(async () => {
     if (!isAdminOrManager) return;
     try {
@@ -212,7 +205,7 @@ const AdminLeads = () => {
           label: u.full_name ? `${u.full_name} (${u.email})` : u.email,
         }));
         setAssigneeOptions(options);
-        setManagers(all); // ← feed the table with everyone (keeps prop name stable)
+        setManagers(all);
       }
     } catch {
       Notification.error("Failed to fetch assignees");
@@ -235,7 +228,7 @@ const AdminLeads = () => {
   useEffect(() => {
     fetchStatuses();
     fetchSources();
-    fetchAssignees(); // ← replaces managers/admins-only list
+    fetchAssignees();
     fetchBulkTargets();
   }, [fetchStatuses, fetchSources, fetchAssignees, fetchBulkTargets]);
 
@@ -320,52 +313,81 @@ const AdminLeads = () => {
     }
   };
 
-  // Bulk actions
-  const openBulkAssign = () => {
+  // --------- Bulk Actions (single modal) ---------
+  const openBulkActions = () => {
     if (!hasSelection) {
       Notification.error("Please select at least one lead.");
       return;
     }
-    setBulkAssigneeId("");
-    setBulkOverwrite(false);
-    setBulkAssignOpen(true);
+    setBulkActionsOpen(true);
   };
 
-  const openBulkDelete = () => {
-    if (!hasSelection) {
-      Notification.error("Please select at least one lead.");
-      return;
-    }
-    setBulkDeleteOpen(true);
-  };
-
-  const executeBulkAssign = async () => {
-    if (!bulkAssigneeId) {
+  // UPDATED: accept optional statusId and pass as status_id to API
+  const handleBulkAssign = async ({ assigneeId, overwrite, statusId }) => {
+    if (!assigneeId) {
       Notification.error("Please choose an assignee.");
       return;
     }
     try {
       await API.private.bulkAssignLeads({
         lead_ids: selectedIds,
-        assignee_id: Number(bulkAssigneeId),
-        overwrite: !!bulkOverwrite,
+        assignee_id: Number(assigneeId),
+        overwrite: !!overwrite,
+        // only include when provided
+        ...(statusId ? { status_id: Number(statusId) } : {}),
       });
       Notification.success("Leads assigned successfully");
-      setBulkAssignOpen(false);
       await fetchLeads();
     } catch (err) {
       Notification.error(err.response?.data?.error || "Bulk assign failed");
+      throw err; // keep modal in consistent state
     }
   };
 
-  const executeBulkDelete = async () => {
+  const handleBulkStatus = async ({ statusId }) => {
+    if (!statusId) {
+      Notification.error("Please choose a status.");
+      return;
+    }
+    try {
+      await API.private.bulkUpdateLeadStatus({
+        lead_ids: selectedIds,
+        status_id: Number(statusId),
+      });
+      Notification.success("Status updated for selected leads");
+      await fetchLeads();
+    } catch (err) {
+      Notification.error(err.response?.data?.error || "Bulk status update failed");
+      throw err;
+    }
+  };
+
+  const handleBulkSource = async ({ sourceId }) => {
+    if (!sourceId) {
+      Notification.error("Please choose a source.");
+      return;
+    }
+    try {
+      await API.private.bulkUpdateLeadSource({
+        lead_ids: selectedIds,
+        source_id: Number(sourceId),
+      });
+      Notification.success("Source updated for selected leads");
+      await fetchLeads();
+    } catch (err) {
+      Notification.error(err.response?.data?.error || "Bulk source update failed");
+      throw err;
+    }
+  };
+
+  const handleBulkDelete = async () => {
     try {
       await API.private.bulkDeleteLeads(selectedIds);
       Notification.success("Leads deleted successfully");
-      setBulkDeleteOpen(false);
       await fetchLeads();
     } catch (err) {
       Notification.error(err.response?.data?.error || "Bulk delete failed");
+      throw err;
     }
   };
 
@@ -538,27 +560,18 @@ const AdminLeads = () => {
   return (
     <DefaultLayout>
       <div className="space-y-6">
-        {/* Heading + Add/Import Buttons */}
+        {/* Heading + Add/Import + Bulk Actions */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <Heading>Admin Leads</Heading>
           <div className="flex flex-wrap gap-2">
             {isAdminOrManager && (
-              <>
-                <button
-                  onClick={openBulkAssign}
-                  className="px-4 py-2 rounded bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition disabled:opacity-50"
-                  disabled={!hasSelection}
-                >
-                  Assign Selected
-                </button>
-                <button
-                  onClick={openBulkDelete}
-                  className="px-4 py-2 rounded bg-red-600 text-white font-medium hover:bg-red-700 transition disabled:opacity-50"
-                  disabled={!hasSelection}
-                >
-                  Delete Selected
-                </button>
-              </>
+              <button
+                onClick={openBulkActions}
+                className="px-4 py-2 rounded bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition disabled:opacity-50"
+                disabled={!hasSelection}
+              >
+                Bulk Actions
+              </button>
             )}
             <div className="w-fit">
               <AccentButton
@@ -650,6 +663,7 @@ const AdminLeads = () => {
           loading={loading}
         />
 
+        {/* Single-lead modals remain unchanged */}
         <ConfirmDeleteModal
           isOpen={isDeleteModalOpen}
           lead={leadToDelete}
@@ -665,66 +679,21 @@ const AdminLeads = () => {
           onConfirm={handleAssign}
         />
 
-        {/* ===== Bulk Assign Modal ===== */}
-        <Modal isOpen={bulkAssignOpen} onClose={() => setBulkAssignOpen(false)} title="Assign Selected Leads" size="sm">
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              You’re assigning <span className="font-semibold">{selectedIds.length}</span> selected lead
-              {selectedIds.length > 1 ? "s" : ""}.
-            </p>
-
-            <Select
-              label="Assign to"
-              value={bulkAssigneeId}
-              onChange={(val) => setBulkAssigneeId(val)}
-              options={bulkTargetOptions}
-              placeholder="Choose user…"
-            />
-
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="rounded border-gray-300"
-                checked={bulkOverwrite}
-                onChange={(e) => setBulkOverwrite(e.target.checked)}
-              />
-              Overwrite existing assignees (otherwise, already-assigned leads will be skipped)
-            </label>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <div className="w-fit">
-                <GrayButton text="Cancel" onClick={() => setBulkAssignOpen(false)} />
-              </div>
-              <div className="w-fit">
-                <AccentButton text="Assign" onClick={executeBulkAssign} />
-              </div>
-            </div>
-          </div>
-        </Modal>
-
-        {/* ===== Bulk Delete Modal ===== */}
-        <Modal isOpen={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} title="Delete Selected Leads" size="sm">
-          <div className="space-y-4">
-            <p className="text-sm text-gray-700">
-              This will permanently delete <span className="font-semibold">{selectedIds.length}</span> lead
-              {selectedIds.length > 1 ? "s" : ""}. This action cannot be undone.
-            </p>
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => setBulkDeleteOpen(false)}
-                className="text-sm px-4 py-1.5 rounded bg-gray-300 hover:bg-gray-400"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={executeBulkDelete}
-                className="text-sm px-4 py-1.5 rounded bg-red-600 text-white hover:bg-red-700"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </Modal>
+        {/* ===== Bulk Actions Modal (assign + status + source + delete) ===== */}
+        <BulkActionsModal
+          isOpen={bulkActionsOpen}
+          onClose={() => setBulkActionsOpen(false)}
+          selectedCount={selectedIds.length}
+          selectedIds={selectedIds}
+          targetOptions={bulkTargetOptions}
+          statusOptions={statuses}
+          sourceOptions={sources}
+          onBulkAssign={handleBulkAssign}
+          onBulkStatus={handleBulkStatus}
+          onBulkSource={handleBulkSource}
+          onBulkDelete={handleBulkDelete}
+          canAssign={isAdminOrManager}
+        />
       </div>
     </DefaultLayout>
   );

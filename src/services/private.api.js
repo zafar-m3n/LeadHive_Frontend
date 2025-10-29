@@ -321,12 +321,12 @@ const getBulkAssignableTargets = async () => {
   });
 };
 
-const bulkAssignLeads = async ({ lead_ids, assignee_id, overwrite = false }) => {
-  return await instance.apiClient.post(
-    "/api/v1/bulk/assign",
-    { lead_ids, assignee_id, overwrite },
-    { headers: instance.defaultHeaders() }
-  );
+// Bulk assign leads (Admin & Manager) — now supports optional status change
+const bulkAssignLeads = async ({ lead_ids = [], assignee_id, overwrite = false, status_id = null }) => {
+  const payload = { lead_ids, assignee_id, overwrite };
+  if (status_id !== undefined && status_id !== null) payload.status_id = status_id;
+
+  return await instance.apiClient.post("/api/v1/bulk/assign", payload, { headers: instance.defaultHeaders() });
 };
 
 // Bulk delete leads (Admin & Manager)
@@ -336,6 +336,24 @@ const bulkDeleteLeads = async (lead_ids = []) => {
     headers: instance.defaultHeaders(),
     data: { lead_ids },
   });
+};
+
+// Bulk update lead status (Admin & Manager)
+const bulkUpdateLeadStatus = async ({ lead_ids = [], status_id }) => {
+  return await instance.apiClient.post(
+    "/api/v1/bulk/status",
+    { lead_ids, status_id },
+    { headers: instance.defaultHeaders() }
+  );
+};
+
+// Bulk update lead source (Admin & Manager)
+const bulkUpdateLeadSource = async ({ lead_ids = [], source_id }) => {
+  return await instance.apiClient.post(
+    "/api/v1/bulk/source",
+    { lead_ids, source_id },
+    { headers: instance.defaultHeaders() }
+  );
 };
 
 /* ========================== */
@@ -479,6 +497,8 @@ const privateAPI = {
   getBulkAssignableTargets,
   bulkAssignLeads,
   bulkDeleteLeads,
+  bulkUpdateLeadStatus,
+  bulkUpdateLeadSource,
 
   // Admin: Lead Sources & Statuses
   listAdminLeadSources,
