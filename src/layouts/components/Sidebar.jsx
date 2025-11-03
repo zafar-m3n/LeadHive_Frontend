@@ -31,6 +31,7 @@ const Sidebar = ({ menuOpen, setMenuOpen, onExpandChange }) => {
     { label: "Manage Users", icon: "mdi:account-multiple-outline", path: "/admin/users" },
     { label: "Teams", icon: "mdi:users", path: "/admin/teams" },
     { label: "Leads", icon: "mdi:account-tie-outline", path: "/admin/leads" },
+    { label: "Leads Export", icon: "mdi:export", path: "/admin/leads/export" },
     { label: "Settings", icon: "mdi:cog-outline", path: "/admin/settings" },
     { label: "Logout", icon: "mdi:logout", action: "logout" },
   ];

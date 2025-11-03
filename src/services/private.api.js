@@ -430,6 +430,26 @@ export const deleteAdminLeadStatus = async (id) => {
 };
 
 /* ========================== */
+/* Leads Export (Count + CSV) */
+/* ========================== */
+
+const getLeadsExportCount = async (filters = {}) => {
+  return await instance.apiClient.post(
+    "/api/v1/leads/export/count",
+    { filters },
+    { headers: instance.defaultHeaders() }
+  );
+};
+
+const downloadLeadsExport = async (filters = {}) => {
+  return await instance.apiClient.post(
+    "/api/v1/leads/export/download",
+    { filters },
+    { headers: instance.defaultHeaders(), responseType: "blob" }
+  );
+};
+
+/* ========================== */
 /* Export API                 */
 /* ========================== */
 
@@ -511,6 +531,10 @@ const privateAPI = {
   createAdminLeadStatus,
   updateAdminLeadStatus,
   deleteAdminLeadStatus,
+
+  // Leads Export
+  getLeadsExportCount,
+  downloadLeadsExport,
 };
 
 export default privateAPI;
