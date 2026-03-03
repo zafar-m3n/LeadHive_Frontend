@@ -343,7 +343,7 @@ const bulkUpdateLeadStatus = async ({ lead_ids = [], status_id }) => {
   return await instance.apiClient.post(
     "/api/v1/bulk/status",
     { lead_ids, status_id },
-    { headers: instance.defaultHeaders() }
+    { headers: instance.defaultHeaders() },
   );
 };
 
@@ -352,7 +352,7 @@ const bulkUpdateLeadSource = async ({ lead_ids = [], source_id }) => {
   return await instance.apiClient.post(
     "/api/v1/bulk/source",
     { lead_ids, source_id },
-    { headers: instance.defaultHeaders() }
+    { headers: instance.defaultHeaders() },
   );
 };
 
@@ -385,7 +385,7 @@ export const updateAdminLeadSource = async (id, { label }) => {
   return await instance.apiClient.put(
     `/api/v1/lead/lead/sources/${id}`,
     { label },
-    { headers: instance.defaultHeaders() }
+    { headers: instance.defaultHeaders() },
   );
 };
 
@@ -419,7 +419,7 @@ export const updateAdminLeadStatus = async (id, { label }) => {
   return await instance.apiClient.put(
     `/api/v1/lead/lead/statuses/${id}`,
     { label },
-    { headers: instance.defaultHeaders() }
+    { headers: instance.defaultHeaders() },
   );
 };
 
@@ -437,7 +437,7 @@ const getLeadsExportCount = async (filters = {}) => {
   return await instance.apiClient.post(
     "/api/v1/leads/export/count",
     { filters },
-    { headers: instance.defaultHeaders() }
+    { headers: instance.defaultHeaders() },
   );
 };
 
@@ -445,8 +445,24 @@ const downloadLeadsExport = async (filters = {}) => {
   return await instance.apiClient.post(
     "/api/v1/leads/export/download",
     { filters },
-    { headers: instance.defaultHeaders(), responseType: "blob" }
+    { headers: instance.defaultHeaders(), responseType: "blob" },
   );
+};
+
+/* ========================== */
+/* Reports Functions          */
+/* ========================== */
+
+// GET /api/v1/reports/monthly?year=YYYY&month=MM
+// params: { year?: number, month?: number }
+// - year: 2025–2035
+// - month: 1–12 (1 = January)
+// If you omit them, backend will default to current month.
+const getMonthlyReports = async (params = {}) => {
+  return await instance.apiClient.get("/api/v1/reports/monthly", {
+    headers: instance.defaultHeaders(),
+    params,
+  });
 };
 
 /* ========================== */
@@ -535,6 +551,9 @@ const privateAPI = {
   // Leads Export
   getLeadsExportCount,
   downloadLeadsExport,
+
+  // Reports
+  getMonthlyReports,
 };
 
 export default privateAPI;
