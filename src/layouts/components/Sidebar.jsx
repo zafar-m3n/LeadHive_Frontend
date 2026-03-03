@@ -39,7 +39,7 @@ const Sidebar = ({ menuOpen, setMenuOpen, onExpandChange }) => {
   const managerItems = [
     { label: "Dashboard", icon: "mdi:view-dashboard-outline", path: "/manager/dashboard" },
     { label: "Team Leads", icon: "mdi:account-group-outline", path: "/manager/leads" },
-    { label: "Reports", icon: "mdi:chart-bar", path: "/manager/reports" },
+    // { label: "Reports", icon: "mdi:chart-bar", path: "/manager/reports" },
     { label: "My Team", icon: "mdi:users", path: "/manager/team" },
     { label: "Profile", icon: "mdi:account-circle-outline", path: "/manager/profile" },
     { label: "Logout", icon: "mdi:logout", action: "logout" },
