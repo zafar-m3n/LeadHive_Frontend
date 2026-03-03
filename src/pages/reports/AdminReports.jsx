@@ -106,23 +106,28 @@ const AdminReports = () => {
     totalCalls: 0,
     byAgent: [],
   };
+
   const callsBySource = reportData?.cards?.callsBySource || [];
+
   const salesFromCalls = reportData?.cards?.salesFromCalls || {
     totalCustomers: 0,
     bySource: [],
   };
+
   const monthlyPerformance = reportData?.cards?.monthlyPerformance || {
     statuses: [],
+    sources: [],
     agents: [],
   };
 
-  // Helper: sum status counts for an agent
-  const getAgentTotalCalls = (agent) => {
+  const agents = Array.isArray(monthlyPerformance.agents) ? monthlyPerformance.agents : [];
+
+  // ---------- Helpers for monthlyPerformance ----------
+  const getAgentTotalLeads = (agent) => {
     if (!agent || !Array.isArray(agent.status_counts)) return 0;
     return agent.status_counts.reduce((sum, status) => sum + (Number(status.count) || 0), 0);
   };
 
-  // Helper: get "customer" count for an agent
   const getAgentCustomers = (agent) => {
     if (!agent || !Array.isArray(agent.status_counts)) return 0;
     const customer = agent.status_counts.find((s) => s.status_value === "customer" || s.status_id === 1000);
@@ -130,29 +135,29 @@ const AdminReports = () => {
   };
 
   // Totals from monthlyPerformance
-  const totalCallsFromPerformance = Array.isArray(monthlyPerformance.agents)
-    ? monthlyPerformance.agents.reduce((sum, agent) => sum + getAgentTotalCalls(agent), 0)
-    : 0;
+  const totalCallsFromPerformance = agents.reduce((sum, agent) => sum + (Number(agent.calls_this_month) || 0), 0);
 
-  const totalCustomersFromPerformance = Array.isArray(monthlyPerformance.agents)
-    ? monthlyPerformance.agents.reduce((sum, agent) => sum + getAgentCustomers(agent), 0)
-    : 0;
+  const totalCustomersFromPerformance = agents.reduce((sum, agent) => sum + getAgentCustomers(agent), 0);
 
   // Final totals that power the summary cards
   const totalCalls = totalCallsFromPerformance || callStats.totalCalls || 0;
   const totalCustomers = salesFromCalls.totalCustomers || totalCustomersFromPerformance || 0;
 
-  const activeAgentsCount = Array.isArray(monthlyPerformance.agents)
-    ? monthlyPerformance.agents.filter((agent) => getAgentTotalCalls(agent) > 0).length
-    : 0;
+  const activeAgentsCount = agents.filter((agent) => Number(agent.calls_this_month) > 0).length;
 
   const totalCallsFromSources = callsBySource.reduce((sum, src) => sum + (Number(src.call_count) || 0), 0);
 
-  // ---------- Agent performance table config ----------
-  // Build status columns but exclude the "customer" status,
-  // because we already have a dedicated "Customers" column.
-  const statusColumns = (monthlyPerformance.statuses || [])
-    .filter((status) => status.value !== "customer" && status.id !== 1000)
+  // ---------- Status columns (hide all-zero statuses) ----------
+  const nonZeroStatusColumns = (monthlyPerformance.statuses || [])
+    .filter((status) => status.value !== "customer" && status.id !== 1000) // keep customer out of dynamic cols
+    .filter((status) => {
+      // keep only statuses where at least one agent has a non-zero count
+      const hasNonZero = agents.some((agent) => {
+        const entry = agent.status_counts && agent.status_counts.find((s) => s.status_id === status.id);
+        return entry && Number(entry.count) > 0;
+      });
+      return hasNonZero;
+    })
     .map((status) => ({
       key: `status_${status.value}`,
       label: status.label,
@@ -163,8 +168,7 @@ const AdminReports = () => {
     { key: "total_calls", label: "Calls (this month)" },
     { key: "customers", label: "Customers" },
     { key: "conversion_rate", label: "Conversion Rate" },
-    // no Share of Calls column anymore
-    ...statusColumns,
+    ...nonZeroStatusColumns,
   ];
 
   const renderAgentCell = (row, col) => {
@@ -174,7 +178,6 @@ const AdminReports = () => {
       case "full_name": {
         const name = row.full_name || "Unknown User";
         const email = row.email || "-";
-        // Match LeadsTable style: name + email stacked, truncated
         return (
           <div className="flex flex-col overflow-hidden text-left">
             <span className="font-medium text-gray-900 truncate">{name}</span>
@@ -184,8 +187,8 @@ const AdminReports = () => {
       }
 
       case "total_calls": {
-        const totalForAgent = getAgentTotalCalls(row);
-        return totalForAgent;
+        const calls = Number(row.calls_this_month) || 0;
+        return calls;
       }
 
       case "customers": {
@@ -194,10 +197,10 @@ const AdminReports = () => {
       }
 
       case "conversion_rate": {
-        const totalForAgent = getAgentTotalCalls(row);
-        const customers = getAgentCustomers(row);
-        if (!totalForAgent || !customers) return "-";
-        const pct = ((customers / totalForAgent) * 100).toFixed(1);
+        const calls = Number(row.calls_this_month) || 0;
+        const rate = Number(row.conversion_rate) || 0;
+        if (!calls || !rate) return "-";
+        const pct = (rate * 100).toFixed(1);
         return `${pct}%`;
       }
 
@@ -212,6 +215,47 @@ const AdminReports = () => {
         return row[col.key];
       }
     }
+  };
+
+  // ---------- Source columns (hide all-zero sources) ----------
+  const nonZeroSourceColumns = (monthlyPerformance.sources || [])
+    .filter((src) => {
+      // keep only sources where at least one agent has a non-zero count
+      const hasNonZero = agents.some((agent) => {
+        const entry = agent.source_counts && agent.source_counts.find((s) => Number(s.source_id) === src.id);
+        return entry && Number(entry.count) > 0;
+      });
+      return hasNonZero;
+    })
+    .map((src) => ({
+      key: `source_${src.id}`,
+      label: src.label || src.value || `Source ${src.id}`,
+    }));
+
+  const agentSourceColumns = [{ key: "full_name", label: "Agent" }, ...nonZeroSourceColumns];
+
+  const renderAgentSourceCell = (row, col) => {
+    if (!row) return null;
+
+    if (col.key === "full_name") {
+      const name = row.full_name || "Unknown User";
+      const email = row.email || "-";
+      return (
+        <div className="flex flex-col overflow-hidden text-left">
+          <span className="font-medium text-gray-900 truncate">{name}</span>
+          <span className="text-xs text-gray-600 truncate">{email}</span>
+        </div>
+      );
+    }
+
+    if (col.key.startsWith("source_")) {
+      const sourceIdStr = col.key.replace("source_", "");
+      const sourceId = Number(sourceIdStr);
+      const entry = row.source_counts && row.source_counts.find((s) => Number(s.source_id) === sourceId);
+      return entry ? Number(entry.count) || 0 : 0;
+    }
+
+    return row[col.key];
   };
 
   return (
@@ -343,12 +387,37 @@ const AdminReports = () => {
                 </div>
               </div>
 
-              <Table
-                columns={agentColumns}
-                data={monthlyPerformance.agents || []}
-                renderCell={renderAgentCell}
-                emptyMessage="No agent call activity recorded for this month."
-              />
+              {/* horizontal scroll wrapper */}
+              <div className="mt-4 overflow-x-auto">
+                <Table
+                  columns={agentColumns}
+                  data={agents}
+                  renderCell={renderAgentCell}
+                  emptyMessage="No agent call activity recorded for this month."
+                />
+              </div>
+            </div>
+
+            {/* Agent × Source Breakdown */}
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 mt-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-800">Agent Source Breakdown</h2>
+                  <p className="text-xs text-gray-500">
+                    Number of leads per source, based on latest assignments in {selectedMonthLabel || "this month"}.
+                  </p>
+                </div>
+              </div>
+
+              {/* horizontal scroll wrapper */}
+              <div className="mt-4 overflow-x-auto">
+                <Table
+                  columns={agentSourceColumns}
+                  data={agents}
+                  renderCell={renderAgentSourceCell}
+                  emptyMessage="No source-based assignment data for this month."
+                />
+              </div>
             </div>
           </>
         )}
