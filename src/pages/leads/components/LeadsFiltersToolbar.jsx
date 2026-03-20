@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import Select from "@/components/form/Select";
-import TextInput from "@/components/form/TextInput"; // keep for Search
+import TextInput from "@/components/form/TextInput";
 import MultiSelect from "@/components/form/MultiSelect";
 import IconComponent from "@/components/ui/Icon";
 import Calendar from "react-calendar";
@@ -14,6 +14,7 @@ const toISODate = (d) => {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 };
+
 const today = new Date();
 const MIN_DATE = new Date("2020-01-01");
 const MAX_DATE = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -24,18 +25,18 @@ const DatePopover = ({ label, value, onChangeISO, minDate, maxDate, clampMinTo, 
   const btnRef = useRef(null);
   const popRef = useRef(null);
 
-  // close when clicking outside
   useEffect(() => {
     if (!open) return;
+
     const handler = (e) => {
       if (btnRef.current?.contains(e.target) || popRef.current?.contains(e.target)) return;
       setOpen(false);
     };
+
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // effective bounds
   const effMin = clampMinTo ? new Date(clampMinTo) : minDate;
   const effMax = clampMaxTo ? new Date(clampMaxTo) : maxDate;
 
@@ -50,6 +51,7 @@ const DatePopover = ({ label, value, onChangeISO, minDate, maxDate, clampMinTo, 
   return (
     <div className="w-full relative">
       {label && <label className="block mb-1 text-sm font-medium text-gray-800">{label}</label>}
+
       <button
         ref={btnRef}
         type="button"
@@ -61,6 +63,7 @@ const DatePopover = ({ label, value, onChangeISO, minDate, maxDate, clampMinTo, 
         <span className={value ? "" : "text-gray-400"}>{value || "Select date"}</span>
         <IconComponent icon="mdi:calendar" width={18} className="text-gray-600" />
       </button>
+
       {open && (
         <div ref={popRef} className="absolute z-30 mt-2 rounded-md border border-gray-200 bg-white p-2 shadow-lg">
           <Calendar
@@ -71,6 +74,7 @@ const DatePopover = ({ label, value, onChangeISO, minDate, maxDate, clampMinTo, 
             next2Label={null}
             prev2Label={null}
           />
+
           <div className="mt-2 flex justify-between gap-2">
             <button
               type="button"
@@ -82,6 +86,7 @@ const DatePopover = ({ label, value, onChangeISO, minDate, maxDate, clampMinTo, 
             >
               Clear
             </button>
+
             <button type="button" className="text-xs text-gray-600" onClick={() => setOpen(false)}>
               Close
             </button>
@@ -102,9 +107,9 @@ const LeadsFiltersToolbar = ({
   showAssignee = false,
   values = {
     search: "",
-    statusIds: [], // <-- multi-status (array)
-    sourceIds: [], // <-- multi-source (array)
-    assigneeId: "",
+    statusIds: [],
+    sourceIds: [],
+    assigneeIds: [],
     orderBy: "",
     orderDir: "ASC",
     limit: 25,
@@ -120,7 +125,7 @@ const LeadsFiltersToolbar = ({
     search,
     statusIds = [],
     sourceIds = [],
-    assigneeId,
+    assigneeIds = [],
     orderBy,
     orderDir,
     limit,
@@ -130,14 +135,13 @@ const LeadsFiltersToolbar = ({
 
   const getLabel = (arr, val) => arr.find((x) => String(x.value) === String(val))?.label;
 
-  // Collapse into one summary chip when too many selections
   const MAX_STATUS_CHIPS = 4;
   const MAX_SOURCE_CHIPS = 4;
+  const MAX_ASSIGNEE_CHIPS = 4;
 
   const chips = useMemo(() => {
     const items = [];
 
-    // statuses (multi)
     if (Array.isArray(statusIds) && statusIds.length) {
       if (statusIds.length <= MAX_STATUS_CHIPS) {
         statusIds.forEach((sid) => {
@@ -154,7 +158,6 @@ const LeadsFiltersToolbar = ({
       }
     }
 
-    // sources (multi)
     if (Array.isArray(sourceIds) && sourceIds.length) {
       if (sourceIds.length <= MAX_SOURCE_CHIPS) {
         sourceIds.forEach((sid) => {
@@ -171,8 +174,21 @@ const LeadsFiltersToolbar = ({
       }
     }
 
-    if (showAssignee && assigneeId)
-      items.push({ key: "assignee", label: `Assignee: ${getLabel(assigneeOptions, assigneeId) || assigneeId}` });
+    if (showAssignee && Array.isArray(assigneeIds) && assigneeIds.length) {
+      if (assigneeIds.length <= MAX_ASSIGNEE_CHIPS) {
+        assigneeIds.forEach((aid) => {
+          items.push({
+            key: `assignee:${aid}`,
+            label: `Assignee: ${getLabel(assigneeOptions, aid) || aid}`,
+          });
+        });
+      } else {
+        items.push({
+          key: "assignees:all",
+          label: `Assignees: ${assigneeIds.length} selected`,
+        });
+      }
+    }
 
     if (orderBy) items.push({ key: "orderBy", label: `Sort: ${getLabel(sortFields, orderBy) || orderBy}` });
     if (orderDir !== "ASC") items.push({ key: "orderDir", label: `Dir: ${orderDir}` });
@@ -190,7 +206,7 @@ const LeadsFiltersToolbar = ({
     search,
     statusIds,
     sourceIds,
-    assigneeId,
+    assigneeIds,
     orderBy,
     orderDir,
     statuses,
@@ -205,32 +221,42 @@ const LeadsFiltersToolbar = ({
   const hasActiveFilters = chips.length > 0;
 
   const clearChip = (key) => {
-    // statuses
     if (key.startsWith("status:")) {
       const id = key.split(":")[1];
       const next = (statusIds || []).filter((s) => String(s) !== String(id));
       onChange({ statusIds: next });
       return;
     }
+
     if (key === "statuses:all") {
       onChange({ statusIds: [] });
       return;
     }
 
-    // sources
     if (key.startsWith("source:")) {
       const id = key.split(":")[1];
       const next = (sourceIds || []).filter((s) => String(s) !== String(id));
       onChange({ sourceIds: next });
       return;
     }
+
     if (key === "sources:all") {
       onChange({ sourceIds: [] });
       return;
     }
 
-    // other filters
-    if (key === "assignee") onChange({ assigneeId: "" });
+    if (key.startsWith("assignee:")) {
+      const id = key.split(":")[1];
+      const next = (assigneeIds || []).filter((a) => String(a) !== String(id));
+      onChange({ assigneeIds: next });
+      return;
+    }
+
+    if (key === "assignees:all") {
+      onChange({ assigneeIds: [] });
+      return;
+    }
+
     if (key === "orderBy") onChange({ orderBy: "" });
     if (key === "orderDir") onChange({ orderDir: "ASC" });
     if (key === "assignedRange") onChange({ assignedFrom: "", assignedTo: "" });
@@ -239,7 +265,6 @@ const LeadsFiltersToolbar = ({
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      {/* Top row: Search + Quick actions */}
       <div className="flex flex-col gap-3 md:flex-row md:items-end">
         <div className="flex-1">
           <TextInput
@@ -283,9 +308,7 @@ const LeadsFiltersToolbar = ({
         </div>
       </div>
 
-      {/* Filters grid — responsive */}
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {/* Multi-status filter */}
         <MultiSelect
           label="Statuses"
           value={Array.isArray(statusIds) ? statusIds : []}
@@ -294,7 +317,6 @@ const LeadsFiltersToolbar = ({
           placeholder="All statuses"
         />
 
-        {/* Multi-source filter */}
         <MultiSelect
           label="Sources"
           value={Array.isArray(sourceIds) ? sourceIds : []}
@@ -304,11 +326,11 @@ const LeadsFiltersToolbar = ({
         />
 
         {showAssignee && (
-          <Select
-            label="Assignee"
-            value={assigneeId}
-            onChange={(v) => onChange({ assigneeId: v })}
-            options={[{ value: "", label: "All" }, ...assigneeOptions]}
+          <MultiSelect
+            label="Assignees"
+            value={Array.isArray(assigneeIds) ? assigneeIds : []}
+            onChange={(vals) => onChange({ assigneeIds: vals })}
+            options={assigneeOptions}
             placeholder="All assignees"
           />
         )}
@@ -321,7 +343,6 @@ const LeadsFiltersToolbar = ({
           placeholder="Ascending"
         />
 
-        {/* Styled date inputs */}
         <DatePopover
           label="Assigned from"
           value={assignedFrom}
@@ -330,6 +351,7 @@ const LeadsFiltersToolbar = ({
           maxDate={MAX_DATE}
           clampMaxTo={assignedTo}
         />
+
         <DatePopover
           label="Assigned to"
           value={assignedTo}
@@ -358,7 +380,6 @@ const LeadsFiltersToolbar = ({
         )}
       </div>
 
-      {/* Active Chips */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {chips.length > 0 ? (
           chips.map((chip) => (

@@ -30,7 +30,7 @@ const DEFAULT_FILTERS = {
   search: "",
   statusIds: [],
   sourceIds: [],
-  assigneeId: "",
+  assigneeIds: [],
   orderBy: "",
   orderDir: "ASC",
   assignedFrom: "",
@@ -45,7 +45,7 @@ const getInitialFilters = () => {
   return {
     statusIds: Array.isArray(stored.statusIds) ? stored.statusIds : DEFAULT_FILTERS.statusIds,
     sourceIds: Array.isArray(stored.sourceIds) ? stored.sourceIds : DEFAULT_FILTERS.sourceIds,
-    assigneeId: stored.assigneeId ?? DEFAULT_FILTERS.assigneeId,
+    assigneeIds: Array.isArray(stored.assigneeIds) ? stored.assigneeIds : DEFAULT_FILTERS.assigneeIds,
     orderBy: stored.orderBy ?? DEFAULT_FILTERS.orderBy,
     orderDir: stored.orderDir ?? DEFAULT_FILTERS.orderDir,
     assignedFrom: stored.assignedFrom ?? DEFAULT_FILTERS.assignedFrom,
@@ -55,6 +55,9 @@ const getInitialFilters = () => {
     search: DEFAULT_FILTERS.search,
   };
 };
+
+const arraysEqualLoose = (a = [], b = []) =>
+  Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => String(v) === String(b[i]));
 
 const AdminLeads = () => {
   const me = token.getUserData();
@@ -87,7 +90,7 @@ const AdminLeads = () => {
 
   const [statusIds, setStatusIds] = useState(() => initial.statusIds);
   const [sourceIds, setSourceIds] = useState(() => initial.sourceIds);
-  const [assigneeId, setAssigneeId] = useState(() => initial.assigneeId);
+  const [assigneeIds, setAssigneeIds] = useState(() => initial.assigneeIds);
   const [orderBy, setOrderBy] = useState(() => initial.orderBy);
   const [orderDir, setOrderDir] = useState(() => initial.orderDir);
   const [search, setSearch] = useState(() => initial.search);
@@ -122,7 +125,8 @@ const AdminLeads = () => {
         limit,
         status_ids: Array.isArray(statusIds) && statusIds.length ? statusIds.join(",") : undefined,
         source_ids: Array.isArray(sourceIds) && sourceIds.length ? sourceIds.join(",") : undefined,
-        assignee_id: isAdminOrManager && assigneeId ? assigneeId : undefined,
+        assignee_ids:
+          isAdminOrManager && Array.isArray(assigneeIds) && assigneeIds.length ? assigneeIds.join(",") : undefined,
         orderBy: orderBy || undefined,
         orderDir: orderDir || undefined,
         search: debouncedSearch || undefined,
@@ -149,7 +153,7 @@ const AdminLeads = () => {
     limit,
     statusIds,
     sourceIds,
-    assigneeId,
+    assigneeIds,
     isAdminOrManager,
     orderBy,
     orderDir,
@@ -225,7 +229,7 @@ const AdminLeads = () => {
     token.setPersistedLeadsFilters({
       statusIds,
       sourceIds,
-      assigneeId,
+      assigneeIds,
       orderBy,
       orderDir,
       assignedFrom,
@@ -233,7 +237,7 @@ const AdminLeads = () => {
       limit,
       page,
     });
-  }, [statusIds, sourceIds, assigneeId, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
+  }, [statusIds, sourceIds, assigneeIds, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
 
   const handleSortClick = useCallback(
     (field) => {
@@ -447,12 +451,7 @@ const AdminLeads = () => {
 
     if (Object.prototype.hasOwnProperty.call(partial, "statusIds")) {
       const next = Array.isArray(partial.statusIds) ? partial.statusIds : [];
-      const same =
-        Array.isArray(next) &&
-        Array.isArray(statusIds) &&
-        next.length === statusIds.length &&
-        next.every((v, i) => String(v) === String(statusIds[i]));
-      if (!same) {
+      if (!arraysEqualLoose(next, statusIds)) {
         setStatusIds(next);
         changed = true;
       }
@@ -460,20 +459,18 @@ const AdminLeads = () => {
 
     if (Object.prototype.hasOwnProperty.call(partial, "sourceIds")) {
       const next = Array.isArray(partial.sourceIds) ? partial.sourceIds : [];
-      const same =
-        Array.isArray(next) &&
-        Array.isArray(sourceIds) &&
-        next.length === sourceIds.length &&
-        next.every((v, i) => String(v) === String(sourceIds[i]));
-      if (!same) {
+      if (!arraysEqualLoose(next, sourceIds)) {
         setSourceIds(next);
         changed = true;
       }
     }
 
-    if (Object.prototype.hasOwnProperty.call(partial, "assigneeId") && partial.assigneeId !== assigneeId) {
-      setAssigneeId(partial.assigneeId);
-      changed = true;
+    if (Object.prototype.hasOwnProperty.call(partial, "assigneeIds")) {
+      const next = Array.isArray(partial.assigneeIds) ? partial.assigneeIds : [];
+      if (!arraysEqualLoose(next, assigneeIds)) {
+        setAssigneeIds(next);
+        changed = true;
+      }
     }
 
     if (Object.prototype.hasOwnProperty.call(partial, "orderBy") && partial.orderBy !== orderBy) {
@@ -502,7 +499,7 @@ const AdminLeads = () => {
   const resetAllFilters = () => {
     setStatusIds(DEFAULT_FILTERS.statusIds);
     setSourceIds(DEFAULT_FILTERS.sourceIds);
-    setAssigneeId(DEFAULT_FILTERS.assigneeId);
+    setAssigneeIds(DEFAULT_FILTERS.assigneeIds);
     setOrderBy(DEFAULT_FILTERS.orderBy);
     setOrderDir(DEFAULT_FILTERS.orderDir);
     setSearch(DEFAULT_FILTERS.search);
@@ -514,7 +511,7 @@ const AdminLeads = () => {
     token.setPersistedLeadsFilters({
       statusIds: DEFAULT_FILTERS.statusIds,
       sourceIds: DEFAULT_FILTERS.sourceIds,
-      assigneeId: DEFAULT_FILTERS.assigneeId,
+      assigneeIds: DEFAULT_FILTERS.assigneeIds,
       orderBy: DEFAULT_FILTERS.orderBy,
       orderDir: DEFAULT_FILTERS.orderDir,
       assignedFrom: DEFAULT_FILTERS.assignedFrom,
@@ -614,7 +611,7 @@ const AdminLeads = () => {
             search,
             statusIds,
             sourceIds,
-            assigneeId,
+            assigneeIds,
             orderBy,
             orderDir,
             limit,
