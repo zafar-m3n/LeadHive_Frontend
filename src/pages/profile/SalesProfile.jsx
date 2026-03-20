@@ -1,4 +1,3 @@
-// src/pages/sales/SalesProfile.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
@@ -13,9 +12,6 @@ import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as Yup from "yup";
 
-/** ============================
- *  Validation schema
- *  ============================ */
 const schema = Yup.object({
   current_password: Yup.string().required("Current password is required"),
   new_password: Yup.string().required("New password is required").min(8, "New password must be at least 8 characters"),
@@ -24,9 +20,6 @@ const schema = Yup.object({
     .required("Please confirm your new password"),
 });
 
-/** ============================
- *  Small helpers
- *  ============================ */
 const initialsFromName = (fullName = "") => {
   try {
     const parts = String(fullName).trim().split(/\s+/);
@@ -48,9 +41,6 @@ const FieldRow = ({ label, value, icon }) => (
   </div>
 );
 
-/** ============================
- *  Component
- *  ============================ */
 const SalesProfile = () => {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profile, setProfile] = useState(null);
@@ -71,7 +61,6 @@ const SalesProfile = () => {
     },
   });
 
-  // Fetch profile on mount
   useEffect(() => {
     let mounted = true;
     const fetchProfile = async () => {
@@ -104,7 +93,7 @@ const SalesProfile = () => {
         new_password: values.new_password,
       });
       setNotif({ type: "success", message: "Password updated successfully." });
-      reset(); // clear fields
+      reset();
     } catch (err) {
       console.error("Update password error:", err);
       setNotif({
@@ -135,9 +124,7 @@ const SalesProfile = () => {
           </Notification>
         )}
 
-        {/* Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Profile Card */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               {loadingProfile ? (
@@ -153,19 +140,10 @@ const SalesProfile = () => {
                 </div>
               ) : (
                 <>
-                  {/* Avatar */}
                   <div className="flex items-center gap-4">
-                    {profile?.avatar_url ? (
-                      <img
-                        src={profile.avatar_url}
-                        alt={profile?.full_name || "User"}
-                        className="w-20 h-20 rounded-full object-cover border border-gray-200"
-                      />
-                    ) : (
-                      <div className="w-20 h-20 rounded-full bg-accent/10 text-accent border border-accent/20 flex items-center justify-center text-xl font-semibold">
-                        {nameInitials}
-                      </div>
-                    )}
+                    <div className="w-20 h-20 rounded-full bg-accent/10 text-accent border border-accent/20 flex items-center justify-center text-xl font-semibold">
+                      {nameInitials}
+                    </div>
                     <div>
                       <div className="text-xl font-semibold text-gray-800">{profile?.full_name || "-"}</div>
                       <div className="inline-flex items-center gap-2 mt-1">
@@ -179,7 +157,6 @@ const SalesProfile = () => {
                     </div>
                   </div>
 
-                  {/* Details */}
                   <div className="mt-6 divide-y divide-gray-100">
                     <FieldRow label="Email" value={profile?.email} icon="mdi:email-outline" />
                     <FieldRow
@@ -199,7 +176,6 @@ const SalesProfile = () => {
             </div>
           </div>
 
-          {/* Change Password */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-800">Change Password</h2>
@@ -239,7 +215,6 @@ const SalesProfile = () => {
                 </div>
               </form>
 
-              {/* Tips */}
               <div className="mt-6 text-xs text-gray-600 space-y-1">
                 <div className="flex items-start gap-2">
                   <Icon icon="mdi:shield-key" width={16} className="mt-0.5" />

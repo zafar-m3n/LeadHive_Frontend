@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
 import Notification from "@/components/ui/Notification";
@@ -12,26 +11,25 @@ import LeadsTable from "./components/LeadsTable";
 import LeadsFiltersToolbar from "./components/LeadsFiltersToolbar";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import ConfirmAssignModal from "./components/ConfirmAssignModal";
+import LeadDetailsModal from "./components/LeadDetailsModal";
 import token from "@/lib/utilities";
 import BulkActionsModal from "./components/BulkActionsModal";
 
-/** ============================
- *  Simple debounce hook
- *  ============================ */
 const useDebouncedValue = (value, delay = 300) => {
   const [debounced, setDebounced] = useState(value);
+
   useEffect(() => {
     const t = setTimeout(() => setDebounced(value), delay);
     return () => clearTimeout(t);
   }, [value, delay]);
+
   return debounced;
 };
 
-// Defaults (note: search is NEVER persisted)
 const DEFAULT_FILTERS = {
   search: "",
-  statusIds: [], // ← multi-status
-  sourceIds: [], // ← multi-source
+  statusIds: [],
+  sourceIds: [],
   assigneeId: "",
   orderBy: "",
   orderDir: "ASC",
@@ -41,9 +39,9 @@ const DEFAULT_FILTERS = {
   page: 1,
 };
 
-// Read once from storage (sync) and build initial state
 const getInitialFilters = () => {
   const stored = token.getPersistedLeadsFilters(DEFAULT_FILTERS) || {};
+
   return {
     statusIds: Array.isArray(stored.statusIds) ? stored.statusIds : DEFAULT_FILTERS.statusIds,
     sourceIds: Array.isArray(stored.sourceIds) ? stored.sourceIds : DEFAULT_FILTERS.sourceIds,
@@ -54,27 +52,21 @@ const getInitialFilters = () => {
     assignedTo: stored.assignedTo ?? DEFAULT_FILTERS.assignedTo,
     limit: Number(stored.limit ?? DEFAULT_FILTERS.limit),
     page: Number(stored.page ?? DEFAULT_FILTERS.page),
-    // IMPORTANT: search is volatile (never persisted)
     search: DEFAULT_FILTERS.search,
   };
 };
 
 const AdminLeads = () => {
-  const navigate = useNavigate();
-
-  // Current user + role
   const me = token.getUserData();
   const role = me?.role?.value;
   const isAdminOrManager = role === "admin" || role === "manager";
 
-  // Data
   const [leads, setLeads] = useState([]);
-  const [statuses, setStatuses] = useState([]); // [{value:id,label}]
-  const [sources, setSources] = useState([]); // [{value:id,label}]
-  const [managers, setManagers] = useState([]); // ← ALL assignees
+  const [statuses, setStatuses] = useState([]);
+  const [sources, setSources] = useState([]);
+  const [managers, setManagers] = useState([]);
   const [assigneeOptions, setAssigneeOptions] = useState([]);
 
-  // Bulk targets (uses /bulk/targets)
   const [bulkTargets, setBulkTargets] = useState([]);
   const bulkTargetOptions = useMemo(
     () =>
@@ -82,58 +74,52 @@ const AdminLeads = () => {
         value: u.id,
         label: u.full_name ? `${u.full_name} (${u.email})` : u.email,
       })),
-    [bulkTargets]
+    [bulkTargets],
   );
 
-  // UI
   const [loading, setLoading] = useState(false);
 
-  // ---------- Hydrated initial state (from localStorage) ----------
   const initial = useRef(getInitialFilters()).current;
 
-  // Pagination
   const [page, setPage] = useState(() => initial.page);
   const [limit, setLimit] = useState(() => initial.limit);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Filters / Sorting / Search
-  const [statusIds, setStatusIds] = useState(() => initial.statusIds); // ← array
-  const [sourceIds, setSourceIds] = useState(() => initial.sourceIds); // ← array
+  const [statusIds, setStatusIds] = useState(() => initial.statusIds);
+  const [sourceIds, setSourceIds] = useState(() => initial.sourceIds);
   const [assigneeId, setAssigneeId] = useState(() => initial.assigneeId);
   const [orderBy, setOrderBy] = useState(() => initial.orderBy);
   const [orderDir, setOrderDir] = useState(() => initial.orderDir);
-  const [search, setSearch] = useState(() => initial.search); // never persisted
+  const [search, setSearch] = useState(() => initial.search);
   const [assignedFrom, setAssignedFrom] = useState(() => initial.assignedFrom);
   const [assignedTo, setAssignedTo] = useState(() => initial.assignedTo);
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  // Modals (single-lead)
-  const [isModalOpen, setIsModalOpen] = useState(false); // Add Lead
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [leadToAssign, setLeadToAssign] = useState(null);
   const [selectedAssignee, setSelectedAssignee] = useState(null);
 
-  // Bulk selection
   const [selectedIds, setSelectedIds] = useState([]);
   const hasSelection = selectedIds.length > 0;
 
-  // Bulk Actions modal
   const [bulkActionsOpen, setBulkActionsOpen] = useState(false);
 
-  // Prevent stale updates (race-safe)
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [activeLeadId, setActiveLeadId] = useState(null);
+
   const fetchGuard = useRef(0);
 
-  // === API calls ===
   const fetchLeads = useCallback(async () => {
     const fetchId = ++fetchGuard.current;
     setLoading(true);
+
     try {
       const params = {
         page: page ?? 1,
         limit,
-        // >>> serialize arrays to comma-separated string for the API <<<
         status_ids: Array.isArray(statusIds) && statusIds.length ? statusIds.join(",") : undefined,
         source_ids: Array.isArray(sourceIds) && sourceIds.length ? sourceIds.join(",") : undefined,
         assignee_id: isAdminOrManager && assigneeId ? assigneeId : undefined,
@@ -145,6 +131,7 @@ const AdminLeads = () => {
       };
 
       const res = await API.private.getLeads(params);
+
       if (fetchId !== fetchGuard.current) return;
 
       if (res.data?.code === "OK") {
@@ -193,9 +180,9 @@ const AdminLeads = () => {
     }
   }, []);
 
-  // Use UNIVERSAL assignees (admins + managers + reps)
   const fetchAssignees = useCallback(async () => {
     if (!isAdminOrManager) return;
+
     try {
       const res = await API.private.getAssignees();
       if (res.data?.code === "OK") {
@@ -214,17 +201,15 @@ const AdminLeads = () => {
 
   const fetchBulkTargets = useCallback(async () => {
     if (!isAdminOrManager) return;
+
     try {
       const res = await API.private.getBulkAssignableTargets();
       if (res?.data?.code === "OK" || res?.data?.success === true) {
         setBulkTargets(res.data.data?.targets || []);
       }
-    } catch {
-      // silent
-    }
+    } catch {}
   }, [isAdminOrManager]);
 
-  // Bootstrap lookup data (non-blocking)
   useEffect(() => {
     fetchStatuses();
     fetchSources();
@@ -232,16 +217,14 @@ const AdminLeads = () => {
     fetchBulkTargets();
   }, [fetchStatuses, fetchSources, fetchAssignees, fetchBulkTargets]);
 
-  // Initial and subsequent fetches
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
 
-  // Persist everything EXCEPT search
   useEffect(() => {
     token.setPersistedLeadsFilters({
-      statusIds, // ← persist array
-      sourceIds, // ← persist array
+      statusIds,
+      sourceIds,
       assigneeId,
       orderBy,
       orderDir,
@@ -252,7 +235,20 @@ const AdminLeads = () => {
     });
   }, [statusIds, sourceIds, assigneeId, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
 
-  // === Handlers ===
+  const handleSortClick = useCallback(
+    (field) => {
+      setPage(1);
+
+      if (orderBy === field) {
+        setOrderDir((prevDir) => (prevDir === "ASC" ? "DESC" : "ASC"));
+      } else {
+        setOrderBy(field);
+        setOrderDir("ASC");
+      }
+    },
+    [orderBy],
+  );
+
   const handleSubmit = async (data) => {
     setLoading(true);
     try {
@@ -267,8 +263,9 @@ const AdminLeads = () => {
     }
   };
 
-  const handleEdit = (lead) => {
-    navigate(`/admin/leads/${lead.id}`);
+  const handleOpenDetails = (lead) => {
+    setActiveLeadId(lead.id);
+    setDetailsModalOpen(true);
   };
 
   const confirmDelete = (lead) => {
@@ -278,10 +275,16 @@ const AdminLeads = () => {
 
   const handleDelete = async () => {
     if (!leadToDelete) return;
+
     try {
       await API.private.deleteLead(leadToDelete.id);
       Notification.success("Lead deleted successfully");
       await fetchLeads();
+
+      if (Number(activeLeadId) === Number(leadToDelete.id)) {
+        setDetailsModalOpen(false);
+        setActiveLeadId(null);
+      }
     } catch (err) {
       Notification.error(err.response?.data?.error || "Failed to delete lead");
     } finally {
@@ -298,6 +301,7 @@ const AdminLeads = () => {
 
   const handleAssign = async () => {
     if (!leadToAssign || !selectedAssignee) return;
+
     try {
       await API.private.assignLead(leadToAssign.id, {
         assignee_id: selectedAssignee.id,
@@ -313,7 +317,6 @@ const AdminLeads = () => {
     }
   };
 
-  // --------- Bulk Actions (single modal) ---------
   const openBulkActions = () => {
     if (!hasSelection) {
       Notification.error("Please select at least one lead.");
@@ -322,25 +325,24 @@ const AdminLeads = () => {
     setBulkActionsOpen(true);
   };
 
-  // UPDATED: accept optional statusId and pass as status_id to API
   const handleBulkAssign = async ({ assigneeId, overwrite, statusId }) => {
     if (!assigneeId) {
       Notification.error("Please choose an assignee.");
       return;
     }
+
     try {
       await API.private.bulkAssignLeads({
         lead_ids: selectedIds,
         assignee_id: Number(assigneeId),
         overwrite: !!overwrite,
-        // only include when provided
         ...(statusId ? { status_id: Number(statusId) } : {}),
       });
       Notification.success("Leads assigned successfully");
       await fetchLeads();
     } catch (err) {
       Notification.error(err.response?.data?.error || "Bulk assign failed");
-      throw err; // keep modal in consistent state
+      throw err;
     }
   };
 
@@ -349,6 +351,7 @@ const AdminLeads = () => {
       Notification.error("Please choose a status.");
       return;
     }
+
     try {
       await API.private.bulkUpdateLeadStatus({
         lead_ids: selectedIds,
@@ -367,6 +370,7 @@ const AdminLeads = () => {
       Notification.error("Please choose a source.");
       return;
     }
+
     try {
       await API.private.bulkUpdateLeadSource({
         lead_ids: selectedIds,
@@ -391,10 +395,10 @@ const AdminLeads = () => {
     }
   };
 
-  // Bulk selection helpers
   const toggleSelect = (id) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
+
   const toggleSelectAll = (idsOnPage, checked) => {
     if (checked) {
       setSelectedIds((prev) => Array.from(new Set([...prev, ...idsOnPage])));
@@ -403,7 +407,6 @@ const AdminLeads = () => {
     }
   };
 
-  // Sorting choices
   const sortFields = useMemo(
     () => [
       { value: "", label: "Default (ID)" },
@@ -411,12 +414,11 @@ const AdminLeads = () => {
       { value: "last_name", label: "Last name" },
       { value: "email", label: "Email" },
       { value: "company", label: "Company" },
-      { value: "value_decimal", label: "Value" },
       { value: "created_at", label: "Created at" },
       { value: "updated_at", label: "Updated at" },
       { value: "assigned_at", label: "Assigned at (latest)" },
     ],
-    []
+    [],
   );
 
   const orderDirOptions = [
@@ -432,7 +434,7 @@ const AdminLeads = () => {
       { value: 100, label: "100" },
       { value: 200, label: "200" },
     ],
-    []
+    [],
   );
 
   const handleToolbarChange = (partial) => {
@@ -443,7 +445,6 @@ const AdminLeads = () => {
       changed = true;
     }
 
-    // statusIds (array)
     if (Object.prototype.hasOwnProperty.call(partial, "statusIds")) {
       const next = Array.isArray(partial.statusIds) ? partial.statusIds : [];
       const same =
@@ -457,7 +458,6 @@ const AdminLeads = () => {
       }
     }
 
-    // sourceIds (array)
     if (Object.prototype.hasOwnProperty.call(partial, "sourceIds")) {
       const next = Array.isArray(partial.sourceIds) ? partial.sourceIds : [];
       const same =
@@ -475,18 +475,22 @@ const AdminLeads = () => {
       setAssigneeId(partial.assigneeId);
       changed = true;
     }
+
     if (Object.prototype.hasOwnProperty.call(partial, "orderBy") && partial.orderBy !== orderBy) {
       setOrderBy(partial.orderBy);
       changed = true;
     }
+
     if (Object.prototype.hasOwnProperty.call(partial, "orderDir") && partial.orderDir !== orderDir) {
       setOrderDir(partial.orderDir);
       changed = true;
     }
+
     if (Object.prototype.hasOwnProperty.call(partial, "assignedFrom") && partial.assignedFrom !== assignedFrom) {
       setAssignedFrom(partial.assignedFrom);
       changed = true;
     }
+
     if (Object.prototype.hasOwnProperty.call(partial, "assignedTo") && partial.assignedTo !== assignedTo) {
       setAssignedTo(partial.assignedTo);
       changed = true;
@@ -496,18 +500,17 @@ const AdminLeads = () => {
   };
 
   const resetAllFilters = () => {
-    setStatusIds(DEFAULT_FILTERS.statusIds); // ← []
-    setSourceIds(DEFAULT_FILTERS.sourceIds); // ← []
+    setStatusIds(DEFAULT_FILTERS.statusIds);
+    setSourceIds(DEFAULT_FILTERS.sourceIds);
     setAssigneeId(DEFAULT_FILTERS.assigneeId);
     setOrderBy(DEFAULT_FILTERS.orderBy);
     setOrderDir(DEFAULT_FILTERS.orderDir);
-    setSearch(DEFAULT_FILTERS.search); // not persisted
+    setSearch(DEFAULT_FILTERS.search);
     setAssignedFrom(DEFAULT_FILTERS.assignedFrom);
     setAssignedTo(DEFAULT_FILTERS.assignedTo);
     setLimit(DEFAULT_FILTERS.limit);
     setPage(DEFAULT_FILTERS.page);
 
-    // Persist everything EXCEPT search
     token.setPersistedLeadsFilters({
       statusIds: DEFAULT_FILTERS.statusIds,
       sourceIds: DEFAULT_FILTERS.sourceIds,
@@ -529,11 +532,12 @@ const AdminLeads = () => {
 
   const idsOnCurrentPage = useMemo(() => leads.map((l) => l.id), [leads]);
 
-  // Inline Status Update (used by table)
   const handleInlineStatusUpdate = async (lead, statusOption) => {
     if (!lead || !statusOption?.id) return;
+
     const prev = leads;
     const now = new Date().toISOString();
+
     setLeads((ls) =>
       ls.map((l) =>
         l.id === lead.id
@@ -543,8 +547,8 @@ const AdminLeads = () => {
               LeadStatus: { id: statusOption.id, value: statusOption.value, label: statusOption.label },
               updated_at: now,
             }
-          : l
-      )
+          : l,
+      ),
     );
 
     try {
@@ -557,12 +561,19 @@ const AdminLeads = () => {
     }
   };
 
+  const handleDetailsModalRefresh = async (maybeLeadId) => {
+    if (maybeLeadId) {
+      setActiveLeadId(Number(maybeLeadId));
+    }
+    await fetchLeads();
+  };
+
   return (
     <DefaultLayout>
       <div className="space-y-6">
-        {/* Heading + Add/Import + Bulk Actions */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <Heading>Admin Leads</Heading>
+
           <div className="flex flex-wrap gap-2">
             {isAdminOrManager && (
               <button
@@ -573,6 +584,7 @@ const AdminLeads = () => {
                 Bulk Actions
               </button>
             )}
+
             <div className="w-fit">
               <AccentButton
                 text="Add Lead"
@@ -581,8 +593,9 @@ const AdminLeads = () => {
                 }}
               />
             </div>
+
             <button
-              onClick={() => navigate("/admin/leads/import")}
+              onClick={() => window.location.assign("/admin/leads/import")}
               className="px-4 py-2 rounded bg-black text-white font-medium hover:bg-gray-900 transition"
             >
               Import Leads
@@ -590,7 +603,6 @@ const AdminLeads = () => {
           </div>
         </div>
 
-        {/* Filters & Search Toolbar */}
         <LeadsFiltersToolbar
           statuses={statuses}
           sources={sources}
@@ -600,7 +612,7 @@ const AdminLeads = () => {
           showAssignee={isAdminOrManager}
           values={{
             search,
-            statusIds, // ← multi-status
+            statusIds,
             sourceIds,
             assigneeId,
             orderBy,
@@ -615,14 +627,12 @@ const AdminLeads = () => {
           onResetAll={resetAllFilters}
         />
 
-        {/* Selected counter */}
         {hasSelection && (
           <div className="text-sm text-gray-600">
             <span className="font-medium">{selectedIds.length}</span> selected on this page.
           </div>
         )}
 
-        {/* Leads Table + Pagination */}
         <div className="relative">
           {loading ? (
             <Spinner message="Loading leads..." />
@@ -630,7 +640,7 @@ const AdminLeads = () => {
             <>
               <LeadsTable
                 leads={leads}
-                onEdit={handleEdit}
+                onEdit={handleOpenDetails}
                 onDelete={confirmDelete}
                 managers={managers}
                 onAssignOptionClick={handleAssignOptionClick}
@@ -639,9 +649,13 @@ const AdminLeads = () => {
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelect}
                 onToggleSelectAll={(checked) => toggleSelectAll(idsOnCurrentPage, checked)}
-                statuses={statuses} // keep { id, value, label }
+                statuses={statuses}
                 onStatusUpdate={handleInlineStatusUpdate}
+                orderBy={orderBy}
+                orderDir={orderDir}
+                onSortClick={handleSortClick}
               />
+
               <Pagination
                 className="mt-2"
                 currentPage={page}
@@ -652,7 +666,6 @@ const AdminLeads = () => {
           )}
         </div>
 
-        {/* Add Lead Modal */}
         <LeadFormModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
@@ -663,7 +676,6 @@ const AdminLeads = () => {
           loading={loading}
         />
 
-        {/* Single-lead modals remain unchanged */}
         <ConfirmDeleteModal
           isOpen={isDeleteModalOpen}
           lead={leadToDelete}
@@ -679,7 +691,6 @@ const AdminLeads = () => {
           onConfirm={handleAssign}
         />
 
-        {/* ===== Bulk Actions Modal (assign + status + source + delete) ===== */}
         <BulkActionsModal
           isOpen={bulkActionsOpen}
           onClose={() => setBulkActionsOpen(false)}
@@ -693,6 +704,19 @@ const AdminLeads = () => {
           onBulkSource={handleBulkSource}
           onBulkDelete={handleBulkDelete}
           canAssign={isAdminOrManager}
+        />
+
+        <LeadDetailsModal
+          isOpen={detailsModalOpen}
+          onClose={() => {
+            setDetailsModalOpen(false);
+            setActiveLeadId(null);
+          }}
+          leadId={activeLeadId}
+          statuses={statuses}
+          sources={sources}
+          orderedLeadIds={idsOnCurrentPage}
+          onLeadUpdated={handleDetailsModalRefresh}
         />
       </div>
     </DefaultLayout>

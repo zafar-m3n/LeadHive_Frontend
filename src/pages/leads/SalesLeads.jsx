@@ -1,6 +1,4 @@
-// src/pages/sales/SalesLeads.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import DefaultLayout from "@/layouts/DefaultLayout";
 import API from "@/services/index";
 import Notification from "@/components/ui/Notification";
@@ -10,30 +8,25 @@ import Heading from "@/components/ui/Heading";
 import LeadsTable from "./components/LeadsTable";
 import LeadsFiltersToolbar from "./components/LeadsFiltersToolbar";
 import ConfirmAssignModal from "./components/ConfirmAssignModal";
-import SalesLeadsModal from "./components/SalesLeadsModal";
 import IconComponent from "@/components/ui/Icon";
 import token from "@/lib/utilities";
+import SalesLeadDetailsModal from "./components/SalesLeadDetailsModal";
 
-/** ============================
- *  Simple debounce hook
- *  ============================ */
 const useDebouncedValue = (value, delay = 300) => {
   const [debounced, setDebounced] = useState(value);
+
   useEffect(() => {
     const t = setTimeout(() => setDebounced(value), delay);
     return () => clearTimeout(t);
   }, [value, delay]);
+
   return debounced;
 };
 
-/** ============================
- *  Persisted filter defaults
- *  (search is NEVER persisted)
- *  ============================ */
 const DEFAULT_FILTERS = {
   search: "",
-  statusIds: [], // ← multi-status
-  sourceIds: [], // ← multi-source
+  statusIds: [],
+  sourceIds: [],
   orderBy: "",
   orderDir: "ASC",
   assignedFrom: "",
@@ -42,11 +35,10 @@ const DEFAULT_FILTERS = {
   page: 1,
 };
 
-// Read once from storage (sync) and build initial state
 const getInitialFilters = () => {
   const stored = token.getPersistedLeadsFilters(DEFAULT_FILTERS) || {};
+
   return {
-    // ensure arrays for multi-selects
     statusIds: Array.isArray(stored.statusIds) ? stored.statusIds : DEFAULT_FILTERS.statusIds,
     sourceIds: Array.isArray(stored.sourceIds) ? stored.sourceIds : DEFAULT_FILTERS.sourceIds,
     orderBy: stored.orderBy ?? DEFAULT_FILTERS.orderBy,
@@ -55,14 +47,10 @@ const getInitialFilters = () => {
     assignedTo: stored.assignedTo ?? DEFAULT_FILTERS.assignedTo,
     limit: Number(stored.limit ?? DEFAULT_FILTERS.limit),
     page: Number(stored.page ?? DEFAULT_FILTERS.page),
-    // volatile: never persisted
     search: DEFAULT_FILTERS.search,
   };
 };
 
-/** ============================
- *  Collapsible Managers Card
- *  ============================ */
 const ManagersList = ({ managers = [] }) => {
   const [open, setOpen] = useState(false);
 
@@ -70,7 +58,7 @@ const ManagersList = ({ managers = [] }) => {
     <div className="rounded-lg border border-gray-200 bg-white">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+        className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-50"
         type="button"
       >
         <span className="flex items-center gap-2">
@@ -84,9 +72,9 @@ const ManagersList = ({ managers = [] }) => {
       </button>
 
       <div
-        className={`${
+        className={`overflow-hidden border-t border-gray-100 transition-all duration-200 ${
           open ? "visible max-h-[320px] opacity-100" : "hidden max-h-0 opacity-0"
-        } border-t border-gray-100 overflow-hidden transition-all duration-200`}
+        }`}
       >
         {managers.length === 0 ? (
           <div className="px-3 py-2 text-sm text-gray-600">
@@ -110,33 +98,23 @@ const ManagersList = ({ managers = [] }) => {
   );
 };
 
-/** ============================
- *  Component
- *  ============================ */
 const SalesLeads = () => {
-  const navigate = useNavigate();
-
-  // Data
   const [leads, setLeads] = useState([]);
   const [statuses, setStatuses] = useState([]);
   const [sources, setSources] = useState([]);
-  const [myManagers, setMyManagers] = useState([]); // assigned managers
-  const [me, setMe] = useState(null); // current sales rep
+  const [myManagers, setMyManagers] = useState([]);
+  const [me, setMe] = useState(null);
 
-  // UI
   const [loading, setLoading] = useState(false);
 
-  // ---------- Hydrated initial state (from localStorage) ----------
   const initial = useRef(getInitialFilters()).current;
 
-  // Pagination
   const [page, setPage] = useState(() => initial.page);
   const [limit, setLimit] = useState(() => initial.limit);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Filters (search not persisted)
-  const [statusIds, setStatusIds] = useState(() => initial.statusIds); // ← array
-  const [sourceIds, setSourceIds] = useState(() => initial.sourceIds); // ← array
+  const [statusIds, setStatusIds] = useState(() => initial.statusIds);
+  const [sourceIds, setSourceIds] = useState(() => initial.sourceIds);
   const [orderBy, setOrderBy] = useState(() => initial.orderBy);
   const [orderDir, setOrderDir] = useState(() => initial.orderDir);
   const [search, setSearch] = useState(() => initial.search);
@@ -144,27 +122,23 @@ const SalesLeads = () => {
   const [assignedTo, setAssignedTo] = useState(() => initial.assignedTo);
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  // Modals
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingLead, setEditingLead] = useState(null);
-
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [leadToAssign, setLeadToAssign] = useState(null);
   const [selectedAssignee, setSelectedAssignee] = useState(null);
 
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [activeLeadId, setActiveLeadId] = useState(null);
+
   const fetchGuard = useRef(0);
 
-  /** ============================
-   *  API calls
-   *  ============================ */
   const fetchLeads = useCallback(async () => {
     const fetchId = ++fetchGuard.current;
     setLoading(true);
+
     try {
       const params = {
         page: page ?? 1,
         limit,
-        // serialize arrays to CSV for API
         status_ids: Array.isArray(statusIds) && statusIds.length ? statusIds.join(",") : undefined,
         source_ids: Array.isArray(sourceIds) && sourceIds.length ? sourceIds.join(",") : undefined,
         orderBy: orderBy || undefined,
@@ -229,12 +203,9 @@ const SalesLeads = () => {
       if (res?.data?.code === "OK") {
         setMe(res.data.data);
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, []);
 
-  // Initial loads (lookups)
   useEffect(() => {
     fetchStatuses();
     fetchSources();
@@ -242,16 +213,14 @@ const SalesLeads = () => {
     fetchProfile();
   }, [fetchStatuses, fetchSources, fetchMyManagers, fetchProfile]);
 
-  // Initial + subsequent fetches
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
 
-  // Persist everything EXCEPT search
   useEffect(() => {
     token.setPersistedLeadsFilters({
-      statusIds, // ← persist array
-      sourceIds, // ← persist array
+      statusIds,
+      sourceIds,
       orderBy,
       orderDir,
       assignedFrom,
@@ -261,27 +230,23 @@ const SalesLeads = () => {
     });
   }, [statusIds, sourceIds, orderBy, orderDir, assignedFrom, assignedTo, limit, page]);
 
-  /** ============================
-   *  Handlers
-   *  ============================ */
-  const handleEdit = (lead) => {
-    navigate(`/leads/${lead.id}`);
-  };
+  const handleSortClick = useCallback(
+    (field) => {
+      setPage(1);
 
-  const handleSubmit = async ({ status_id, notes }) => {
-    if (!editingLead) return;
-    setLoading(true);
-    try {
-      await API.private.updateLead(editingLead.id, { status_id, notes });
-      Notification.success("Lead updated successfully");
-      await fetchLeads();
-      setIsModalOpen(false);
-      setEditingLead(null);
-    } catch (err) {
-      Notification.error(err.response?.data?.error || "Failed to update lead");
-    } finally {
-      setLoading(false);
-    }
+      if (orderBy === field) {
+        setOrderDir((prevDir) => (prevDir === "ASC" ? "DESC" : "ASC"));
+      } else {
+        setOrderBy(field);
+        setOrderDir("ASC");
+      }
+    },
+    [orderBy],
+  );
+
+  const handleOpenDetails = (lead) => {
+    setActiveLeadId(lead.id);
+    setDetailsModalOpen(true);
   };
 
   const handleAssignOptionClick = (lead, managerChoice) => {
@@ -289,6 +254,7 @@ const SalesLeads = () => {
       Notification.error("You are not assigned to a manager.");
       return;
     }
+
     setLeadToAssign(lead);
     setSelectedAssignee(managerChoice || myManagers[0]);
     setIsAssignModalOpen(true);
@@ -296,6 +262,7 @@ const SalesLeads = () => {
 
   const handleAssign = async () => {
     if (!leadToAssign || !selectedAssignee) return;
+
     try {
       await API.private.assignLead(leadToAssign.id, { assignee_id: selectedAssignee.id });
       Notification.success("Lead assigned to your manager");
@@ -309,11 +276,12 @@ const SalesLeads = () => {
     }
   };
 
-  // Inline Status Update (used by table)
   const handleInlineStatusUpdate = async (lead, statusOption) => {
     if (!lead || !statusOption?.id) return;
+
     const prev = leads;
     const now = new Date().toISOString();
+
     setLeads((ls) =>
       ls.map((l) =>
         l.id === lead.id
@@ -323,8 +291,8 @@ const SalesLeads = () => {
               LeadStatus: { id: statusOption.id, value: statusOption.value, label: statusOption.label },
               updated_at: now,
             }
-          : l
-      )
+          : l,
+      ),
     );
 
     try {
@@ -337,9 +305,6 @@ const SalesLeads = () => {
     }
   };
 
-  /** ============================
-   *  Config
-   *  ============================ */
   const sortFields = useMemo(
     () => [
       { value: "", label: "Default (ID)" },
@@ -347,12 +312,11 @@ const SalesLeads = () => {
       { value: "last_name", label: "Last name" },
       { value: "email", label: "Email" },
       { value: "company", label: "Company" },
-      { value: "value_decimal", label: "Value" },
       { value: "created_at", label: "Created at" },
       { value: "updated_at", label: "Updated at" },
       { value: "assigned_at", label: "Assigned at (latest)" },
     ],
-    []
+    [],
   );
 
   const orderDirOptions = [
@@ -368,7 +332,7 @@ const SalesLeads = () => {
       { value: 100, label: "100" },
       { value: 200, label: "200" },
     ],
-    []
+    [],
   );
 
   const handleLimitChange = (newValue) => {
@@ -377,7 +341,6 @@ const SalesLeads = () => {
     setPage(1);
   };
 
-  // >>> Only reset to page 1 when the user actually changes something
   const handleToolbarChange = (partial) => {
     let changed = false;
 
@@ -386,7 +349,6 @@ const SalesLeads = () => {
       changed = true;
     }
 
-    // multi-status
     if ("statusIds" in partial) {
       const next = Array.isArray(partial.statusIds) ? partial.statusIds : [];
       const same =
@@ -394,13 +356,13 @@ const SalesLeads = () => {
         Array.isArray(statusIds) &&
         next.length === statusIds.length &&
         next.every((v, i) => String(v) === String(statusIds[i]));
+
       if (!same) {
         setStatusIds(next);
         changed = true;
       }
     }
 
-    // multi-source
     if ("sourceIds" in partial) {
       const next = Array.isArray(partial.sourceIds) ? partial.sourceIds : [];
       const same =
@@ -408,6 +370,7 @@ const SalesLeads = () => {
         Array.isArray(sourceIds) &&
         next.length === sourceIds.length &&
         next.every((v, i) => String(v) === String(sourceIds[i]));
+
       if (!same) {
         setSourceIds(next);
         changed = true;
@@ -418,14 +381,17 @@ const SalesLeads = () => {
       setOrderBy(partial.orderBy);
       changed = true;
     }
+
     if ("orderDir" in partial && partial.orderDir !== orderDir) {
       setOrderDir(partial.orderDir);
       changed = true;
     }
+
     if ("assignedFrom" in partial && partial.assignedFrom !== assignedFrom) {
       setAssignedFrom(partial.assignedFrom);
       changed = true;
     }
+
     if ("assignedTo" in partial && partial.assignedTo !== assignedTo) {
       setAssignedTo(partial.assignedTo);
       changed = true;
@@ -435,17 +401,16 @@ const SalesLeads = () => {
   };
 
   const resetAllFilters = () => {
-    setStatusIds(DEFAULT_FILTERS.statusIds); // ← []
-    setSourceIds(DEFAULT_FILTERS.sourceIds); // ← []
+    setStatusIds(DEFAULT_FILTERS.statusIds);
+    setSourceIds(DEFAULT_FILTERS.sourceIds);
     setOrderBy(DEFAULT_FILTERS.orderBy);
     setOrderDir(DEFAULT_FILTERS.orderDir);
-    setSearch(DEFAULT_FILTERS.search); // not persisted
+    setSearch(DEFAULT_FILTERS.search);
     setAssignedFrom(DEFAULT_FILTERS.assignedFrom);
     setAssignedTo(DEFAULT_FILTERS.assignedTo);
     setLimit(DEFAULT_FILTERS.limit);
     setPage(DEFAULT_FILTERS.page);
 
-    // persist everything EXCEPT search
     token.setPersistedLeadsFilters({
       statusIds: DEFAULT_FILTERS.statusIds,
       sourceIds: DEFAULT_FILTERS.sourceIds,
@@ -458,21 +423,26 @@ const SalesLeads = () => {
     });
   };
 
-  /** ============================
-   *  Render
-   *  ============================ */
+  const idsOnCurrentPage = useMemo(() => leads.map((l) => l.id), [leads]);
+
+  const handleDetailsModalRefresh = async (maybeLeadId) => {
+    if (maybeLeadId) {
+      setActiveLeadId(Number(maybeLeadId));
+    }
+    await fetchLeads();
+  };
+
   return (
     <DefaultLayout>
       <div className="space-y-6">
-        {/* Heading + Managers card */}
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <Heading>My Leads</Heading>
+
           <div className="w-full md:w-auto md:min-w-[360px]">
             <ManagersList managers={myManagers} />
           </div>
         </div>
 
-        {/* Filters & Search */}
         <LeadsFiltersToolbar
           statuses={statuses}
           sources={sources}
@@ -480,8 +450,8 @@ const SalesLeads = () => {
           orderDirOptions={orderDirOptions}
           values={{
             search,
-            statusIds, // ← pass array for multi-status
-            sourceIds, // ← pass array for multi-source
+            statusIds,
+            sourceIds,
             orderBy,
             orderDir,
             limit,
@@ -494,7 +464,6 @@ const SalesLeads = () => {
           onResetAll={resetAllFilters}
         />
 
-        {/* Leads Table */}
         <div className="relative">
           {loading ? (
             <Spinner message="Loading leads..." />
@@ -502,15 +471,19 @@ const SalesLeads = () => {
             <>
               <LeadsTable
                 leads={leads}
-                onEdit={handleEdit}
+                onEdit={handleOpenDetails}
                 onDelete={null}
                 managers={myManagers}
                 onAssignOptionClick={handleAssignOptionClick}
                 mode="sales"
                 selfId={me?.id || null}
-                statuses={statuses} // keep { id, value, label }
+                statuses={statuses}
                 onStatusUpdate={handleInlineStatusUpdate}
+                orderBy={orderBy}
+                orderDir={orderDir}
+                onSortClick={handleSortClick}
               />
+
               <Pagination
                 currentPage={page}
                 totalPages={totalPages}
@@ -521,26 +494,24 @@ const SalesLeads = () => {
           )}
         </div>
 
-        {/* Edit (Status + Notes only) */}
-        <SalesLeadsModal
-          isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setEditingLead(null);
-          }}
-          onSubmit={handleSubmit}
-          editingLead={editingLead}
-          statuses={statuses}
-          loading={loading}
-        />
-
-        {/* Confirm Assign */}
         <ConfirmAssignModal
           isOpen={isAssignModalOpen}
           lead={leadToAssign}
           assignee={selectedAssignee}
           onCancel={() => setIsAssignModalOpen(false)}
           onConfirm={handleAssign}
+        />
+
+        <SalesLeadDetailsModal
+          isOpen={detailsModalOpen}
+          onClose={() => {
+            setDetailsModalOpen(false);
+            setActiveLeadId(null);
+          }}
+          leadId={activeLeadId}
+          statuses={statuses}
+          orderedLeadIds={idsOnCurrentPage}
+          onLeadUpdated={handleDetailsModalRefresh}
         />
       </div>
     </DefaultLayout>

@@ -24,8 +24,6 @@ import AdminLeads from "@/pages/leads/AdminLeads";
 import LeadsImport from "@/pages/leads/LeadsImport";
 import ManagerLeads from "@/pages/leads/ManagerLeads";
 import SalesLeads from "@/pages/leads/SalesLeads";
-import LeadDetails from "@/pages/leads/LeadDetails";
-import SalesLeadDetails from "@/pages/leads/SalesLeadDetails";
 import LeadExport from "@/pages/leadexport";
 
 // Reports
@@ -68,9 +66,6 @@ const protectedRoutes = [
   { path: "/admin/leads/export", element: LeadExport, roles: ["admin"] },
   { path: "/manager/leads", element: ManagerLeads, roles: ["manager"] },
   { path: "/leads", element: SalesLeads, roles: ["sales_rep"] },
-  { path: "/admin/leads/:id", element: LeadDetails, roles: ["admin"] },
-  { path: "/manager/leads/:id", element: LeadDetails, roles: ["manager"] },
-  { path: "/leads/:id", element: SalesLeadDetails, roles: ["sales_rep"] },
 
   // Reports
   { path: "/admin/reports", element: AdminReports, roles: ["admin"] },

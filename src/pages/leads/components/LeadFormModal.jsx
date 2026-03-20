@@ -1,4 +1,3 @@
-// src/pages/admin/components/LeadFormModal.jsx
 import React, { useEffect, useMemo } from "react";
 import Modal from "@/components/ui/Modal";
 import TextInput from "@/components/form/TextInput";
@@ -12,9 +11,6 @@ import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as Yup from "yup";
 
-// ==========================
-// Validation Schema
-// ==========================
 const schema = Yup.object().shape({
   status_id: Yup.string().required("Status is required"),
   email: Yup.string().nullable().email("Invalid email"),
@@ -43,8 +39,6 @@ const LeadFormModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, sourc
     onSubmit({
       ...data,
       phone: data.phone || null,
-      value_decimal: data.value_decimal ? parseFloat(data.value_decimal) : 0.0,
-      // Only send notes when creating a lead
       notes: editingLead ? undefined : data.notes?.trim() || undefined,
     });
   };
@@ -52,9 +46,6 @@ const LeadFormModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, sourc
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={editingLead ? "Edit Lead" : "Add Lead"} size="xxl" centered={true}>
       <form onSubmit={handleSubmit(submitHandler)} className="space-y-5 text-sm">
-        {/* ===================== */}
-        {/* Basic Info */}
-        {/* ===================== */}
         <div>
           <h3 className="text-xs font-semibold text-gray-600 mb-2">Basic Info</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -64,9 +55,6 @@ const LeadFormModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, sourc
           </div>
         </div>
 
-        {/* ===================== */}
-        {/* Contact Info */}
-        {/* ===================== */}
         <div className="border-t border-gray-200 pt-4 mt-4">
           <h3 className="text-xs font-semibold text-gray-600 mb-2">Contact Info</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -95,12 +83,9 @@ const LeadFormModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, sourc
           </div>
         </div>
 
-        {/* ===================== */}
-        {/* Lead Details */}
-        {/* ===================== */}
         <div className="border-t border-gray-200 pt-4 mt-4">
           <h3 className="text-xs font-semibold text-gray-600 mb-2">Lead Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Select
               label="Status"
               value={watch("status_id") || ""}
@@ -117,20 +102,9 @@ const LeadFormModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, sourc
               options={sources}
               placeholder="Select Source"
             />
-
-            <TextInput
-              label="Value"
-              type="number"
-              placeholder="Enter value"
-              {...register("value_decimal")}
-              error={errors.value_decimal?.message}
-            />
           </div>
         </div>
 
-        {/* ===================== */}
-        {/* Notes (only when creating) */}
-        {/* ===================== */}
         {!editingLead && (
           <div className="border-t border-gray-200 pt-4 mt-4">
             <h3 className="text-xs font-semibold text-gray-600 mb-2">Notes</h3>
@@ -143,9 +117,6 @@ const LeadFormModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, sourc
           </div>
         )}
 
-        {/* ===================== */}
-        {/* Actions */}
-        {/* ===================== */}
         <div className="pt-3 flex justify-end gap-2">
           <GrayButton text="Cancel" onClick={onClose} />
           <AccentButton type="submit" text={editingLead ? "Update Lead" : "Create Lead"} loading={loading} />

@@ -34,6 +34,11 @@ const LeadsTable = ({
   selectedIds = [],
   onToggleSelect = () => {},
   onToggleSelectAll = () => {},
+
+  // Sorting from parent
+  orderBy = "",
+  orderDir = "ASC",
+  onSortClick = () => {},
 }) => {
   // -------------------------
   // Assignee dropdown state
@@ -82,12 +87,30 @@ const LeadsTable = ({
     return Number(currentId) === Number(sid);
   }, []);
 
+  const isSortedBy = useCallback((field) => String(orderBy || "") === String(field || ""), [orderBy]);
+
+  const renderSortIcon = useCallback(
+    (field) => {
+      if (!isSortedBy(field)) {
+        return <IconComponent icon="mdi:swap-vertical" width={16} className="text-gray-400" />;
+      }
+
+      return orderDir === "DESC" ? (
+        <IconComponent icon="mdi:arrow-down" width={16} className="text-indigo-600" />
+      ) : (
+        <IconComponent icon="mdi:arrow-up" width={16} className="text-indigo-600" />
+      );
+    },
+    [isSortedBy, orderDir],
+  );
+
   // Close helpers
   const closeAssigneeDropdown = useCallback(() => {
     setDropdownOpen(null);
     setOpenLead(null);
     setAssigneeQuery("");
   }, []);
+
   const closeStatusDropdown = useCallback(() => {
     setStatusDropdownOpen(null);
     setOpenLeadStatus(null);
@@ -101,37 +124,41 @@ const LeadsTable = ({
       if (!isAssignee) closeAssigneeDropdown();
       if (!isStatus) closeStatusDropdown();
     };
+
     const handleEsc = (e) => {
       if (e.key === "Escape") {
         closeAssigneeDropdown();
         closeStatusDropdown();
       }
     };
+
     document.addEventListener("click", handleClickOutside);
     document.addEventListener("keydown", handleEsc);
+
     return () => {
       document.removeEventListener("click", handleClickOutside);
       document.removeEventListener("keydown", handleEsc);
     };
   }, [closeAssigneeDropdown, closeStatusDropdown]);
 
-  // Close if page changes and lead disappears
   useEffect(() => {
     if (dropdownOpen && !leads.some((l) => l.id === dropdownOpen)) closeAssigneeDropdown();
     if (statusDropdownOpen && !leads.some((l) => l.id === statusDropdownOpen)) closeStatusDropdown();
   }, [leads, dropdownOpen, statusDropdownOpen, closeAssigneeDropdown, closeStatusDropdown]);
 
-  // Reposition while open
   useEffect(() => {
     if (!dropdownOpen) return;
+
     const updatePos = () => {
       const trigger = document.querySelector(`[data-assignee-trigger="${dropdownOpen}"]`);
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
       computeAndSetPosition(rect, setDropdownPos);
     };
+
     window.addEventListener("scroll", updatePos, true);
     window.addEventListener("resize", updatePos);
+
     return () => {
       window.removeEventListener("scroll", updatePos, true);
       window.removeEventListener("resize", updatePos);
@@ -140,14 +167,17 @@ const LeadsTable = ({
 
   useEffect(() => {
     if (!statusDropdownOpen) return;
+
     const updatePos = () => {
       const trigger = document.querySelector(`[data-status-trigger="${statusDropdownOpen}"]`);
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
       computeAndSetPosition(rect, setStatusDropdownPos);
     };
+
     window.addEventListener("scroll", updatePos, true);
     window.addEventListener("resize", updatePos);
+
     return () => {
       window.removeEventListener("scroll", updatePos, true);
       window.removeEventListener("resize", updatePos);
@@ -164,12 +194,15 @@ const LeadsTable = ({
 
     let left = rect.left + window.scrollX;
     const overflowRight = left + MENU_WIDTH > window.scrollX + vw - MARGIN;
+
     if (overflowRight) {
       left = rect.right + window.scrollX - MENU_WIDTH;
       if (left < MARGIN) left = MARGIN;
     }
 
-    let top, maxAvailable;
+    let top;
+    let maxAvailable;
+
     if (placeAbove) {
       top = rect.top + window.scrollY;
       maxAvailable = Math.max(160, Math.min(BASE_MAX_HEIGHT, spaceAbove));
@@ -178,23 +211,29 @@ const LeadsTable = ({
       maxAvailable = Math.max(160, Math.min(BASE_MAX_HEIGHT, spaceBelow));
     }
 
-    setter({ top, left, placeAbove, alignRight: overflowRight, maxHeight: maxAvailable });
+    setter({
+      top,
+      left,
+      placeAbove,
+      alignRight: overflowRight,
+      maxHeight: maxAvailable,
+    });
   };
 
-  // Latest assignment helpers
   const getLatestAssignment = (lead) => {
     const arr = lead?.LeadAssignments || [];
     if (!arr.length) return null;
     const latest = [...arr].sort((a, b) => new Date(b.assigned_at) - new Date(a.assigned_at))[0];
     return latest || null;
   };
+
   const getCurrentAssignee = (lead) => getLatestAssignment(lead)?.assignee || null;
   const getCurrentAssigneeName = (lead) => getCurrentAssignee(lead)?.full_name || "-";
 
-  // Toggle handlers
   const toggleAssigneeDropdown = (lead, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     closeStatusDropdown();
+
     if (dropdownOpen === lead.id) {
       closeAssigneeDropdown();
     } else {
@@ -208,6 +247,7 @@ const LeadsTable = ({
   const toggleStatusDropdown = (lead, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     closeAssigneeDropdown();
+
     if (statusDropdownOpen === lead.id) {
       closeStatusDropdown();
     } else {
@@ -222,7 +262,7 @@ const LeadsTable = ({
   // =========================
   const teamSet = useMemo(
     () => new Set((managers || []).filter((u) => Number(u.role_id) !== ROLE.ADMIN).map((u) => u.id)),
-    [managers]
+    [managers],
   );
 
   const dropdownTargets = useMemo(() => managers || [], [managers]);
@@ -232,30 +272,34 @@ const LeadsTable = ({
   // =========================
   const canReassign = (lead) => {
     if (mode === "admin") return true;
+
     const current = getCurrentAssignee(lead);
     if (!current) return false;
+
     if (mode === "manager") {
       return teamSet.has(current.id);
     }
+
     if (mode === "sales") {
       if (!selfId) return false;
       return Number(current.role_id) === ROLE.SALES_REP && Number(current.id) === Number(selfId);
     }
+
     return false;
   };
 
-  const canEditStatus = () => true; // unchanged: everyone can change status
+  const canEditStatus = () => true;
 
-  // Filter assignees by search text (status has no search)
   const filteredAssigneeTargets = useMemo(() => {
     const q = assigneeQuery.trim().toLowerCase();
     if (!q) return dropdownTargets;
+
     return dropdownTargets.filter(
-      (m) => (m.full_name && m.full_name.toLowerCase().includes(q)) || (m.email && m.email.toLowerCase().includes(q))
+      (m) => (m.full_name && m.full_name.toLowerCase().includes(q)) || (m.email && m.email.toLowerCase().includes(q)),
     );
   }, [assigneeQuery, dropdownTargets]);
 
-  // Fixed widths (px)
+  // Fixed widths
   const W_SELECT = "w-[46px]";
   const W_LEAD = "w-[175px]";
   const W_COMPANY = "w-[120px]";
@@ -267,29 +311,17 @@ const LeadsTable = ({
   const someOnPageChecked =
     showSelection && leads.length > 0 && leads.some((l) => selectedIds.includes(l.id)) && !allOnPageChecked;
 
-  // Column visibility
   const showAssigneeCol = mode !== "sales";
-  const showActionsCol = mode === "admin" || mode === "manager"; // hide Actions for sales
+  const showActionsCol = mode === "admin" || mode === "manager";
 
-  // Compute dynamic colSpan for empty state
   const colsCount =
-    (showSelection ? 1 : 0) + // selection
-    1 + // lead
-    1 + // company
-    1 + // phone (hidden md)
-    1 + // status
-    1 + // source (hidden md)
-    1 + // created
-    1 + // last contacted
-    (showAssigneeCol ? 1 : 0) + // assignee
-    (showActionsCol ? 1 : 0); // actions (conditional)
+    (showSelection ? 1 : 0) + 1 + 1 + 1 + 1 + 1 + 1 + 1 + (showAssigneeCol ? 1 : 0) + (showActionsCol ? 1 : 0);
 
   return (
     <div className="w-full overflow-x-auto rounded-lg border border-gray-200 relative">
       <table className="w-full table-auto text-sm leading-[1.25rem]">
         <thead className="bg-accent/20 uppercase tracking-wider">
           <tr className="text-[11px] text-gray-800 font-semibold">
-            {/* Selection */}
             {showSelection && (
               <th className={`px-2 py-2 text-left font-semibold ${W_SELECT}`}>
                 <label className="inline-flex items-center gap-2 cursor-pointer select-none">
@@ -330,11 +362,22 @@ const LeadsTable = ({
             <th className={`px-3 py-2 text-left font-semibold ${W_LEAD}`}>Lead</th>
             <th className={`px-3 py-2 text-left font-semibold ${W_COMPANY}`}>Company</th>
             <th className={`px-3 py-2 text-left font-semibold hidden md:table-cell ${W_PHONE}`}>Phone</th>
-            {/* Country removed */}
             <th className="px-3 py-2 text-left font-semibold">Status</th>
             <th className="px-3 py-2 text-left font-semibold hidden md:table-cell">Source</th>
             <th className={`px-3 py-2 text-left font-semibold ${W_DATE}`}>Created</th>
-            <th className={`px-3 py-2 text-left font-semibold ${W_DATE}`}>Last Contacted</th>
+
+            <th className={`px-3 py-2 text-left font-semibold ${W_DATE}`}>
+              <button
+                type="button"
+                onClick={() => onSortClick("updated_at")}
+                className="inline-flex items-center gap-1 text-left uppercase tracking-wider hover:text-indigo-700 transition"
+                aria-label={`Sort by Last Contacted ${isSortedBy("updated_at") ? `currently ${orderDir}` : ""}`}
+              >
+                <span>Last Contacted</span>
+                {renderSortIcon("updated_at")}
+              </button>
+            </th>
+
             {showAssigneeCol && <th className={`px-3 py-2 text-left font-semibold ${W_ASSIGNEE}`}>Assignee</th>}
             {showActionsCol && <th className="px-3 py-2 text-left font-semibold">Actions</th>}
           </tr>
@@ -361,12 +404,10 @@ const LeadsTable = ({
 
               const reassignable = canReassign(row);
               const isChecked = selectedIds.includes(row.id);
-
               const canEditThisStatus = canEditStatus(row) && Array.isArray(statuses) && statuses.length > 0;
 
               return (
                 <tr key={row.id} className="border-t border-gray-100 hover:bg-gray-50/70">
-                  {/* Row checkbox */}
                   {showSelection && (
                     <td className={`px-2 py-2 align-top ${W_SELECT}`}>
                       <label className="inline-flex items-center gap-2 cursor-pointer select-none">
@@ -399,7 +440,6 @@ const LeadsTable = ({
                     </td>
                   )}
 
-                  {/* Lead (Name + Email) — clickable to details */}
                   <td className="px-3 py-2 align-top">
                     <button
                       type="button"
@@ -412,21 +452,18 @@ const LeadsTable = ({
                     </button>
                   </td>
 
-                  {/* Company */}
                   <td className="px-3 py-2 align-top">
                     <div className={`overflow-hidden ${W_COMPANY}`}>
                       <span className="truncate block">{row.company || "-"}</span>
                     </div>
                   </td>
 
-                  {/* Phone */}
                   <td className={`px-3 py-2 whitespace-nowrap hidden md:table-cell align-top ${W_PHONE}`}>
                     <div className="overflow-hidden">
                       <span className="truncate block">{phone}</span>
                     </div>
                   </td>
 
-                  {/* Status (inline editable dropdown, NO search in portal) */}
                   <td className="px-3 py-2 align-top">
                     {canEditThisStatus ? (
                       <Tooltip content="Change status" placement="top" theme="light">
@@ -451,22 +488,18 @@ const LeadsTable = ({
                     )}
                   </td>
 
-                  {/* Source */}
                   <td className="px-3 py-2 hidden md:table-cell align-top">
                     <Badge text={sourceLabel} color={getSourceColor(sourceValue)} size="sm" rounded="rounded" />
                   </td>
 
-                  {/* Created */}
                   <td className={`px-3 py-2 align-top ${W_DATE}`}>
                     <span className="text-gray-800">{created}</span>
                   </td>
 
-                  {/* Last Contacted (updated_at) */}
                   <td className={`px-3 py-2 align-top ${W_DATE}`}>
                     <span className="text-gray-800">{lastContacted}</span>
                   </td>
 
-                  {/* Assignee (hidden for sales agents) */}
                   {showAssigneeCol && (
                     <td className={`px-3 py-2 align-top ${W_ASSIGNEE}`}>
                       {reassignable ? (
@@ -495,7 +528,6 @@ const LeadsTable = ({
                     </td>
                   )}
 
-                  {/* Actions — no Edit button; Delete only for admin/manager */}
                   {showActionsCol && (
                     <td className="px-3 py-2 align-top">
                       <div className="flex items-center gap-1.5">
@@ -520,9 +552,6 @@ const LeadsTable = ({
         </tbody>
       </table>
 
-      {/* =========================
-          Status Dropdown (Portal) — NO search
-          ========================= */}
       {statusDropdownOpen &&
         ReactDOM.createPortal(
           <div
@@ -537,7 +566,6 @@ const LeadsTable = ({
           >
             <div className="app-scrollbar overflow-y-auto" style={{ maxHeight: `${statusDropdownPos.maxHeight}px` }}>
               {(() => {
-                // Build list without the current status
                 const all = (Array.isArray(statuses) ? statuses : []).map(normStatus).filter(Boolean);
                 const list = all.filter((s) => !sameStatusById(openLeadStatus, s));
 
@@ -566,12 +594,9 @@ const LeadsTable = ({
               })()}
             </div>
           </div>,
-          document.body
+          document.body,
         )}
 
-      {/* =========================
-          Assignee Dropdown (Portal) — WITH search
-          ========================= */}
       {showAssigneeCol &&
         ReactDOM.createPortal(
           <div
@@ -584,7 +609,6 @@ const LeadsTable = ({
             role="listbox"
             aria-hidden={!dropdownOpen}
           >
-            {/* Search */}
             <div className="p-2 border-b border-gray-200 sticky top-0 bg-white">
               <div className="relative">
                 <input
@@ -615,8 +639,9 @@ const LeadsTable = ({
             <div className="app-scrollbar overflow-y-auto" style={{ maxHeight: `${dropdownPos.maxHeight - 44}px` }}>
               {(() => {
                 const list = (filteredAssigneeTargets || []).map((m) => {
-                  const currentAssigneeId = openLead ? getCurrentAssignee(openLead)?.id ?? null : null;
+                  const currentAssigneeId = openLead ? (getCurrentAssignee(openLead)?.id ?? null) : null;
                   const isCurrent = m.id === currentAssigneeId;
+
                   return (
                     <div
                       key={m.id}
@@ -646,7 +671,7 @@ const LeadsTable = ({
               })()}
             </div>
           </div>,
-          document.body
+          document.body,
         )}
     </div>
   );

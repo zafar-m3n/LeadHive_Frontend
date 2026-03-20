@@ -10,14 +10,10 @@ import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as Yup from "yup";
 
-// ==========================
-// Validation Schema
-// ==========================
 const schema = Yup.object().shape({
   status_id: Yup.string().required("Status is required"),
 });
 
-// Display-only row
 const KV = ({ label, value }) => (
   <div className="flex flex-col gap-1">
     <span className="text-[11px] font-medium text-gray-500">{label}</span>
@@ -30,7 +26,7 @@ const SalesLeadsModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, loa
     () => ({
       status_id: editingLead?.status_id || editingLead?.LeadStatus?.id || "",
     }),
-    [editingLead]
+    [editingLead],
   );
 
   const {
@@ -54,7 +50,6 @@ const SalesLeadsModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, loa
     });
   };
 
-  // derived
   const fullName = [editingLead?.first_name, editingLead?.last_name].filter(Boolean).join(" ") || "Unnamed Lead";
 
   const assigneeName = (() => {
@@ -74,7 +69,6 @@ const SalesLeadsModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, loa
         <div className="py-4 text-sm text-gray-600">No lead selected.</div>
       ) : (
         <form onSubmit={handleSubmit(submitHandler)} className="space-y-6 text-sm">
-          {/* ===== Header: name + quick pills ===== */}
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-3">
@@ -98,7 +92,6 @@ const SalesLeadsModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, loa
             </div>
           </div>
 
-          {/* ===== Status Update (only editable field) ===== */}
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
             <h3 className="text-xs font-semibold text-gray-600 mb-3">Update Status</h3>
             <Select
@@ -111,15 +104,13 @@ const SalesLeadsModal = ({ isOpen, onClose, onSubmit, editingLead, statuses, loa
             />
           </div>
 
-          {/* ===== Compact Details (read-only) ===== */}
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <KV label="Company" value={editingLead?.company || "-"} />
               <KV label="Country" value={editingLead?.country || "-"} />
-              <KV label="Value" value={editingLead?.value_decimal ?? "-"} />
             </div>
           </div>
-          {/* ===== Actions ===== */}
+
           <div className="pt-1 flex justify-end gap-2">
             <GrayButton text="Cancel" onClick={onClose} />
             <AccentButton type="submit" text="Save Changes" loading={loading} />
