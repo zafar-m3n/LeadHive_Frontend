@@ -17,13 +17,18 @@ const schema = Yup.object().shape({
   full_name: Yup.string().required("Full name is required"),
   email: Yup.string().email("Invalid email").required("Email is required"),
   password: Yup.string().when("isEdit", {
-    is: false, // required only when adding
+    is: false,
     then: (s) => s.min(6, "Minimum 6 characters").required("Password is required"),
-    otherwise: (s) => s.notRequired(),
+    otherwise: (s) =>
+      s.test(
+        "password-edit-validation",
+        "Minimum 6 characters",
+        (value) => !value || value.trim() === "" || value.trim().length >= 6,
+      ),
   }),
-  // Allow number or string; we’ll coerce to number on submit
   role_id: Yup.mixed().required("Role is required"),
   phone: Yup.string().nullable(),
+  isEdit: Yup.boolean(),
 });
 
 const emptyValues = {
@@ -48,7 +53,6 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, editingUser, roles, loading 
     defaultValues: emptyValues,
   });
 
-  // Reset and prefill when opening; clear when adding
   useEffect(() => {
     if (!isOpen) return;
 
@@ -56,6 +60,7 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, editingUser, roles, loading 
       reset({
         full_name: editingUser.full_name || "",
         email: editingUser.email || "",
+        password: "",
         role_id: editingUser.Role?.id ?? editingUser.role_id ?? "",
         phone: editingUser.phone ?? "",
         isEdit: true,
@@ -66,11 +71,20 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, editingUser, roles, loading 
   }, [isOpen, editingUser, reset]);
 
   const submitHandler = (data) => {
-    onSubmit({
-      ...data,
-      role_id: Number(data.role_id), // ensure numeric for backend
+    const payload = {
+      full_name: data.full_name,
+      email: data.email,
+      role_id: Number(data.role_id),
       phone: data.phone || null,
-    });
+    };
+
+    if (!editingUser) {
+      payload.password = data.password;
+    } else if (data.password && data.password.trim() !== "") {
+      payload.password = data.password.trim();
+    }
+
+    onSubmit(payload);
   };
 
   return (
@@ -91,20 +105,18 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, editingUser, roles, loading 
           error={errors.email?.message}
         />
 
-        {!editingUser && (
-          <TextInput
-            label="Password"
-            type="password"
-            placeholder="Enter password"
-            {...register("password")}
-            error={errors.password?.message}
-          />
-        )}
+        <TextInput
+          label={editingUser ? "Password (leave blank to keep current)" : "Password"}
+          type="password"
+          placeholder={editingUser ? "Enter new password" : "Enter password"}
+          {...register("password")}
+          error={errors.password?.message}
+        />
 
         <Select
           label="Role"
           value={watch("role_id") ?? ""}
-          onChange={(val) => setValue("role_id", val)}
+          onChange={(val) => setValue("role_id", val, { shouldValidate: true })}
           options={roles}
           placeholder="Select Role"
           error={errors.role_id?.message}
@@ -113,7 +125,7 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, editingUser, roles, loading 
         <PhoneInput
           label="Phone"
           value={watch("phone") ?? ""}
-          onChange={(val) => setValue("phone", val)}
+          onChange={(val) => setValue("phone", val, { shouldValidate: true })}
           error={errors.phone?.message}
         />
 
@@ -127,6 +139,7 @@ const UserFormModal = ({ isOpen, onClose, onSubmit, editingUser, roles, loading 
               }}
             />
           </div>
+
           <div className="w-fit">
             <AccentButton type="submit" text={editingUser ? "Update User" : "Create User"} loading={loading} />
           </div>

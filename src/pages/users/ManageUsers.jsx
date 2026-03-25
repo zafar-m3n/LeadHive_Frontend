@@ -15,21 +15,17 @@ import Spinner from "@/components/ui/Spinner";
 const ManageUsers = () => {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
-  const [loading, setLoading] = useState(false); // modal submit state
+  const [loading, setLoading] = useState(false);
 
-  // Fetching state for list (table)
   const [isFetching, setIsFetching] = useState(false);
 
-  // Pagination
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
 
-  // User Form Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
 
-  // Delete Confirmation Modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
 
@@ -37,9 +33,10 @@ const ManageUsers = () => {
     setIsFetching(true);
     try {
       const res = await API.private.getUsers({ page: currentPage, limit: currentLimit });
+
       if (res.data.code === "OK") {
         setUsers(res.data.data.users || []);
-        setTotalPages(res.data.data.pagination.totalPages);
+        setTotalPages(res.data.data.pagination?.totalPages || 1);
       } else {
         Notification.error(res.data.error || "Failed to fetch users");
       }
@@ -53,8 +50,14 @@ const ManageUsers = () => {
   const fetchRoles = async () => {
     try {
       const res = await API.private.getRoles();
+
       if (res.data.code === "OK") {
-        setRoles(res.data.data.map((role) => ({ value: role.id, label: role.label })));
+        setRoles(
+          (res.data.data || []).map((role) => ({
+            value: role.id,
+            label: role.label,
+          })),
+        );
       } else {
         Notification.error(res.data.error || "Failed to fetch roles");
       }
@@ -71,12 +74,19 @@ const ManageUsers = () => {
     fetchRoles();
   }, []);
 
-  // Add/Edit submit
   const handleSubmit = async (data) => {
     setLoading(true);
+
     try {
       if (editingUser) {
-        const res = await API.private.updateUser(editingUser.id, data);
+        const payload = { ...data };
+
+        if (!payload.password || payload.password.trim() === "") {
+          delete payload.password;
+        }
+
+        const res = await API.private.updateUser(editingUser.id, payload);
+
         if (res.data.code === "OK") {
           Notification.success("User updated successfully");
         } else {
@@ -85,6 +95,7 @@ const ManageUsers = () => {
         }
       } else {
         const res = await API.private.createUser(data);
+
         if (res.data.code === "OK") {
           Notification.success("User created successfully");
         } else {
@@ -92,6 +103,7 @@ const ManageUsers = () => {
           return;
         }
       }
+
       await fetchUsers(page, limit);
       setIsModalOpen(false);
       setEditingUser(null);
@@ -114,8 +126,10 @@ const ManageUsers = () => {
 
   const handleDelete = async () => {
     if (!userToDelete) return;
+
     try {
       const res = await API.private.deleteUser(userToDelete.id);
+
       if (res.data.code === "OK") {
         Notification.success("User deleted successfully");
         await fetchUsers(page, limit);
@@ -141,11 +155,10 @@ const ManageUsers = () => {
   return (
     <DefaultLayout>
       <div className="space-y-6">
-        {/* Heading + Actions (Rows-per-page + Add) */}
         <div className="flex justify-between items-center">
           <Heading>Manage Users</Heading>
+
           <div className="flex items-end gap-4">
-            {/* Rows per page - moved to header on the right */}
             <div className="w-40">
               <Select
                 label="Rows per page"
@@ -164,7 +177,6 @@ const ManageUsers = () => {
               />
             </div>
 
-            {/* Add user button */}
             <div className="w-fit">
               <AccentButton
                 text="Add User"
@@ -177,7 +189,6 @@ const ManageUsers = () => {
           </div>
         </div>
 
-        {/* Users Table or Spinner */}
         <div className="min-h-[240px] flex items-center justify-center">
           {isFetching ? (
             <Spinner message="Loading users..." />
@@ -190,8 +201,10 @@ const ManageUsers = () => {
                 switch (col.key) {
                   case "role":
                     return row.Role?.label || "-";
+
                   case "phone":
                     return row.phone && row.phone.length > 4 ? row.phone : "N/A";
+
                   case "actions":
                     return (
                       <div className="flex space-x-2">
@@ -202,6 +215,7 @@ const ManageUsers = () => {
                         >
                           <IconComponent icon="mdi:pencil" width={20} className="text-gray-800" />
                         </button>
+
                         <button
                           onClick={() => confirmDelete(row)}
                           className="inline-flex items-center px-2 py-1 border border-gray-300 rounded hover:bg-gray-100"
@@ -211,6 +225,7 @@ const ManageUsers = () => {
                         </button>
                       </div>
                     );
+
                   default:
                     return row[col.key] || "-";
                 }
@@ -219,14 +234,12 @@ const ManageUsers = () => {
           )}
         </div>
 
-        {/* Pagination (alone below table for cleaner look) */}
         {!isFetching && (
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} className="mt-2" />
         )}
 
-        {/* Create/Edit Modal */}
         <UserFormModal
-          key={editingUser?.id ?? "new"} // force remount to avoid stale form state
+          key={editingUser?.id ?? "new"}
           isOpen={isModalOpen}
           onClose={() => {
             setIsModalOpen(false);
@@ -238,7 +251,6 @@ const ManageUsers = () => {
           loading={loading}
         />
 
-        {/* Delete confirmation */}
         <Modal
           isOpen={isDeleteModalOpen}
           onClose={() => setIsDeleteModalOpen(false)}
@@ -248,10 +260,12 @@ const ManageUsers = () => {
           <p>
             Are you sure you want to delete <span className="font-semibold">{userToDelete?.full_name}</span>?
           </p>
+
           <div className="flex justify-end gap-3 mt-4">
             <button onClick={() => setIsDeleteModalOpen(false)} className="text-sm px-4 py-1.5 rounded bg-gray-300">
               Cancel
             </button>
+
             <button onClick={handleDelete} className="text-sm px-4 py-1.5 rounded bg-red-500 text-white">
               Delete
             </button>
